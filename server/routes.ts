@@ -38,12 +38,10 @@ export function registerRoutes(app: Express): Server {
 
         // Helper function to process person image and remove green screen
         const removeGreenScreen = async (buffer: Buffer, isLeftSide: boolean) => {
-          // First get original dimensions
+          // Get original dimensions
           const metadata = await sharp(buffer).metadata();
-          const originalWidth = metadata.width || TARGET_WIDTH / 2;
-          const originalHeight = metadata.height || TARGET_HEIGHT;
 
-          // Process at original size
+          // Process at original size first
           const { data, info } = await sharp(buffer)
             .raw()
             .toBuffer({ resolveWithObject: true });
@@ -51,34 +49,35 @@ export function registerRoutes(app: Express): Server {
           const rgba = new Uint8Array(info.width * info.height * 4);
           const pixels = new Uint8Array(data);
 
+          // More precise green screen removal
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Precise green screen detection
+            // Enhanced green screen detection with multiple conditions
             const isGreen = 
-              g > 80 && 
-              g > (r * 1.3) && 
-              g > (b * 1.3) && 
-              Math.abs(g - r) > 30 && 
-              Math.abs(g - b) > 30;
+              g > 70 && // Lowered threshold to catch more green variations
+              g > (r * 1.4) && // Increased ratio for better detection
+              g > (b * 1.4) &&
+              Math.abs(g - r) > 40 &&
+              Math.abs(g - b) > 40;
 
             if (isGreen) {
               rgba[outIdx] = 0;
               rgba[outIdx + 1] = 0;
               rgba[outIdx + 2] = 0;
-              rgba[outIdx + 3] = 0;
+              rgba[outIdx + 3] = 0; // Full transparency
             } else {
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
               rgba[outIdx + 2] = b;
-              rgba[outIdx + 3] = 255;
+              rgba[outIdx + 3] = 255; // Fully opaque
             }
           }
 
-          // Create positioned image at original size first
+          // Convert processed image back with original dimensions
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -103,20 +102,20 @@ export function registerRoutes(app: Express): Server {
           .toBuffer();
         };
 
-        // Process both person images with specific positioning
-        const person1Png = await removeGreenScreen(files.person1[0].buffer, true);   // Left side
-        const person2Png = await removeGreenScreen(files.person2[0].buffer, false);  // Right side
+        // Process both person images with positioning
+        const person1Png = await removeGreenScreen(files.person1[0].buffer, true);  // Left side
+        const person2Png = await removeGreenScreen(files.person2[0].buffer, false); // Right side
 
-        // Create final composite with exact layer ordering
+        // Create final composite with precise layer ordering
         const composite = await sharp(background)
           .composite([
             {
-              input: person2Png,  // Person 2 in middle layer
+              input: person2Png,
               top: 0,
               left: 0,
             },
             {
-              input: person1Png,  // Person 1 in top layer
+              input: person1Png,
               top: 0,
               left: 0,
             }
