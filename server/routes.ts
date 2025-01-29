@@ -55,8 +55,13 @@ export function registerRoutes(app: Express): Server {
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Improved green screen detection
-            const isGreen = g > 90 && g > (r * 1.2) && g > (b * 1.2);
+            // More precise green screen detection with refined thresholds
+            const isGreen = 
+              g > 80 && // Lower green threshold to catch more shades of green
+              g > (r * 1.3) && // Slightly more aggressive red ratio
+              g > (b * 1.3) && // Slightly more aggressive blue ratio
+              Math.abs(g - r) > 30 && // Ensure significant difference from red
+              Math.abs(g - b) > 30;    // Ensure significant difference from blue
 
             if (isGreen) {
               rgba[outIdx] = 0;     // R
