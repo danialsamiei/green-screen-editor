@@ -3,11 +3,6 @@ import { useDropzone } from "react-dropzone";
 import { Card } from "@/components/ui/card";
 import { Upload, ChevronDown } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 
 interface ImageUploaderProps {
@@ -64,87 +59,79 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
         </div>
       </Card>
 
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="w-full flex justify-between items-center">
-            <span>Green Screen Settings</span>
-            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`} />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent className="space-y-4 p-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Hue Range (Green)</label>
-            <div className="flex gap-4">
-              <Slider
-                min={0}
-                max={180}
-                step={1}
-                value={[settings.hueMin, settings.hueMax]}
-                onValueChange={([min, max]) => 
-                  setSettings(prev => ({ ...prev, hueMin: min, hueMax: max }))}
-                className="flex-1"
-              />
-              <span className="text-sm text-muted-foreground">
-                {settings.hueMin}° - {settings.hueMax}°
-              </span>
-            </div>
+      <div className="space-y-4 p-4 border rounded-lg">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Hue Range (Green)</label>
+          <div className="flex gap-4">
+            <Slider
+              min={0}
+              max={180}
+              step={1}
+              value={[settings.hueMin, settings.hueMax]}
+              onValueChange={([min, max]) => 
+                setSettings(prev => ({ ...prev, hueMin: min, hueMax: max }))}
+              className="flex-1"
+            />
+            <span className="text-sm text-muted-foreground">
+              {settings.hueMin}° - {settings.hueMax}°
+            </span>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Minimum Saturation</label>
-            <div className="flex gap-4">
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={[settings.saturationMin]}
-                onValueChange={([value]) => 
-                  setSettings(prev => ({ ...prev, saturationMin: value }))}
-                className="flex-1"
-              />
-              <span className="text-sm text-muted-foreground">
-                {settings.saturationMin}%
-              </span>
-            </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Minimum Saturation</label>
+          <div className="flex gap-4">
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[settings.saturationMin]}
+              onValueChange={([value]) => 
+                setSettings(prev => ({ ...prev, saturationMin: value }))}
+              className="flex-1"
+            />
+            <span className="text-sm text-muted-foreground">
+              {settings.saturationMin}%
+            </span>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Minimum Brightness</label>
-            <div className="flex gap-4">
-              <Slider
-                min={0}
-                max={100}
-                step={1}
-                value={[settings.valueMin]}
-                onValueChange={([value]) => 
-                  setSettings(prev => ({ ...prev, valueMin: value }))}
-                className="flex-1"
-              />
-              <span className="text-sm text-muted-foreground">
-                {settings.valueMin}%
-              </span>
-            </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Minimum Brightness</label>
+          <div className="flex gap-4">
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={[settings.valueMin]}
+              onValueChange={([value]) => 
+                setSettings(prev => ({ ...prev, valueMin: value }))}
+              className="flex-1"
+            />
+            <span className="text-sm text-muted-foreground">
+              {settings.valueMin}%
+            </span>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Green Channel Multiplier</label>
-            <div className="flex gap-4">
-              <Slider
-                min={1}
-                max={2}
-                step={0.1}
-                value={[settings.greenMultiplier]}
-                onValueChange={([value]) => 
-                  setSettings(prev => ({ ...prev, greenMultiplier: value }))}
-                className="flex-1"
-              />
-              <span className="text-sm text-muted-foreground">
-                {settings.greenMultiplier}x
-              </span>
-            </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Green Channel Multiplier</label>
+          <div className="flex gap-4">
+            <Slider
+              min={1}
+              max={2}
+              step={0.1}
+              value={[settings.greenMultiplier]}
+              onValueChange={([value]) => 
+                setSettings(prev => ({ ...prev, greenMultiplier: value }))}
+              className="flex-1"
+            />
+            <span className="text-sm text-muted-foreground">
+              {settings.greenMultiplier}x
+            </span>
           </div>
-        </CollapsibleContent>
-      </Collapsible>
+        </div>
+      </div>
     </div>
   );
 }
