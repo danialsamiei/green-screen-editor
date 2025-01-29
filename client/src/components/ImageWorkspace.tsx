@@ -8,7 +8,7 @@ import { Download } from "lucide-react";
 
 interface ImageWithSettings {
   file: File;
-  settings: GreenScreenSettings;
+  settings?: GreenScreenSettings;
 }
 
 export default function ImageWorkspace() {
@@ -23,11 +23,15 @@ export default function ImageWorkspace() {
       const formData = new FormData();
       if (person1Image) {
         formData.append('person1', person1Image.file);
-        formData.append('person1Settings', JSON.stringify(person1Image.settings));
+        if (person1Image.settings) {
+          formData.append('person1Settings', JSON.stringify(person1Image.settings));
+        }
       }
       if (person2Image) {
         formData.append('person2', person2Image.file);
-        formData.append('person2Settings', JSON.stringify(person2Image.settings));
+        if (person2Image.settings) {
+          formData.append('person2Settings', JSON.stringify(person2Image.settings));
+        }
       }
       if (backgroundImage) formData.append('background', backgroundImage);
 
@@ -46,14 +50,14 @@ export default function ImageWorkspace() {
     onSuccess: (imageUrl) => {
       setFinalImage(imageUrl);
       toast({
-        title: "Success!",
-        description: "Your composite image has been created.",
+        title: "موفقیت‌آمیز!",
+        description: "تصویر ترکیبی شما ایجاد شد.",
       });
     },
     onError: () => {
       toast({
-        title: "Error",
-        description: "Failed to process images. Please try again.",
+        title: "خطا",
+        description: "در پردازش تصاویر خطایی رخ داد. لطفاً دوباره تلاش کنید.",
         variant: "destructive",
       });
     },
@@ -65,44 +69,45 @@ export default function ImageWorkspace() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ImageUploader
-          label="Upload person 1 (green screen)"
+          label="آپلود تصویر شخص اول (پرده سبز)"
           onImageSelect={(file, settings) => setPerson1Image({ file, settings })}
         />
         <ImageUploader
-          label="Upload person 2 (green screen)"
+          label="آپلود تصویر شخص دوم (پرده سبز)"
           onImageSelect={(file, settings) => setPerson2Image({ file, settings })}
         />
         <ImageUploader
-          label="Upload background image"
+          label="آپلود تصویر پس‌زمینه"
           onImageSelect={(file) => setBackgroundImage(file)}
+          isBackground
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Input Images</h3>
+          <h3 className="text-lg font-semibold">تصاویر ورودی</h3>
           <div className="grid grid-cols-3 gap-2">
             <ImagePreview
               image={person1Image ? URL.createObjectURL(person1Image.file) : null}
-              label="Person 1"
+              label="شخص اول"
             />
             <ImagePreview
               image={person2Image ? URL.createObjectURL(person2Image.file) : null}
-              label="Person 2"
+              label="شخص دوم"
             />
             <ImagePreview
               image={backgroundImage ? URL.createObjectURL(backgroundImage) : null}
-              label="Background"
+              label="پس‌زمینه"
             />
           </div>
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Final Composite</h3>
+          <h3 className="text-lg font-semibold">تصویر نهایی</h3>
           <ImagePreview
             image={finalImage}
             isProcessing={processImagesMutation.isPending}
-            label="Final composite will appear here"
+            label="تصویر نهایی اینجا نمایش داده خواهد شد"
           />
         </div>
       </div>
@@ -112,7 +117,7 @@ export default function ImageWorkspace() {
           onClick={() => processImagesMutation.mutate()}
           disabled={!canProcess || processImagesMutation.isPending}
         >
-          Process Images
+          پردازش تصاویر
         </Button>
         {finalImage && (
           <Button
@@ -124,8 +129,8 @@ export default function ImageWorkspace() {
               link.click();
             }}
           >
-            <Download className="w-4 h-4 mr-2" />
-            Download
+            <Download className="w-4 h-4 ml-2" />
+            دانلود
           </Button>
         )}
       </div>

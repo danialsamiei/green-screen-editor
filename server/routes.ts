@@ -11,11 +11,7 @@ const TARGET_WIDTH = 1920;
 const TARGET_HEIGHT = 1080;
 
 interface GreenScreenSettings {
-  hueMin: number;
-  hueMax: number;
-  saturationMin: number;
-  valueMin: number;
-  greenMultiplier: number;
+  selectedColors: Array<{ r: number; g: number; b: number }>;
 }
 
 export function registerRoutes(app: Express): Server {
@@ -36,8 +32,10 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        const person1Settings: GreenScreenSettings = JSON.parse(req.body.person1Settings);
-        const person2Settings: GreenScreenSettings = JSON.parse(req.body.person2Settings);
+        const person1Settings: GreenScreenSettings = req.body.person1Settings ? 
+          JSON.parse(req.body.person1Settings) : { selectedColors: [] };
+        const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
+          JSON.parse(req.body.person2Settings) : { selectedColors: [] };
 
         // Helper function to convert RGB to HSV
         const rgbToHsv = (r: number, g: number, b: number) => {
@@ -82,32 +80,31 @@ export function registerRoutes(app: Express): Server {
           const pixels = new Uint8Array(data);
           const rgba = new Uint8Array(info.width * info.height * 4);
 
-          // Process each pixel with advanced HSV-based green screen detection
+          // Define color tolerance
+          const tolerance = 30;
+
+          // Process each pixel with color matching
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Convert RGB to HSV for better color analysis
-            const hsv = rgbToHsv(r, g, b);
+            // Check if pixel color matches any of the selected colors
+            const shouldBeTransparent = settings.selectedColors.some(color => 
+              Math.abs(r - color.r) < tolerance &&
+              Math.abs(g - color.g) < tolerance &&
+              Math.abs(b - color.b) < tolerance
+            );
 
-            // Use provided settings for green screen detection
-            const isGreenScreen = 
-              (hsv.h >= settings.hueMin && hsv.h <= settings.hueMax) && // Custom hue range
-              (hsv.s >= settings.saturationMin) && // Custom saturation minimum
-              (hsv.v >= settings.valueMin) && // Custom value minimum
-              (g > r * settings.greenMultiplier) && // Custom green multiplier
-              (g > b * settings.greenMultiplier); // Custom green multiplier
-
-            if (isGreenScreen) {
-              // Make green screen fully transparent
+            if (shouldBeTransparent) {
+              // Make pixel transparent
               rgba[outIdx] = 0;     // R
               rgba[outIdx + 1] = 0; // G
               rgba[outIdx + 2] = 0; // B
               rgba[outIdx + 3] = 0; // Alpha (transparent)
             } else {
-              // Keep original colors exactly as they are
+              // Keep original colors
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
               rgba[outIdx + 2] = b;

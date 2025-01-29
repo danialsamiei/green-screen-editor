@@ -7,27 +7,20 @@ import { Button } from "@/components/ui/button";
 import ColorPicker from "./ColorPicker";
 
 interface ImageUploaderProps {
-  onImageSelect: (file: File, settings: GreenScreenSettings) => void;
+  onImageSelect: (file: File, settings?: GreenScreenSettings) => void;
   label: string;
+  isBackground?: boolean;
 }
 
 export interface GreenScreenSettings {
-  hueMin: number;
-  hueMax: number;
-  saturationMin: number;
-  valueMin: number;
-  greenMultiplier: number;
+  selectedColors: Array<{ r: number; g: number; b: number }>;
 }
 
-export default function ImageUploader({ onImageSelect, label }: ImageUploaderProps) {
+export default function ImageUploader({ onImageSelect, label, isBackground }: ImageUploaderProps) {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [settings, setSettings] = useState<GreenScreenSettings>({
-    hueMin: 100,
-    hueMax: 160,
-    saturationMin: 40,
-    valueMin: 35,
-    greenMultiplier: 1.4
+    selectedColors: []
   });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -35,8 +28,13 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
       const file = acceptedFiles[0];
       setSelectedFile(file);
       setUploadedImage(URL.createObjectURL(file));
+
+      // برای تصویر پس‌زمینه، مستقیماً فایل را بدون تنظیمات ارسال می‌کنیم
+      if (isBackground) {
+        onImageSelect(file);
+      }
     }
-  }, []);
+  }, [isBackground, onImageSelect]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -46,39 +44,10 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
     maxFiles: 1
   });
 
-  const handleColorPicked = (color: { r: number; g: number; b: number }) => {
-    // تبدیل RGB به HSV و تنظیم محدوده رنگ
-    const max = Math.max(color.r, color.g, color.b) / 255;
-    const min = Math.min(color.r, color.g, color.b) / 255;
-    const diff = max - min;
-
-    let h = 0;
-    if (diff !== 0) {
-      if (max === color.g / 255) {
-        h = 60 * (2 + (color.b / 255 - color.r / 255) / diff);
-      } else if (max === color.b / 255) {
-        h = 60 * (4 + (color.r / 255 - color.g / 255) / diff);
-      } else {
-        h = 60 * ((color.g / 255 - color.b / 255) / diff);
-      }
-    }
-    if (h < 0) h += 360;
-
-    const s = max === 0 ? 0 : (diff / max) * 100;
-    const v = max * 100;
-
-    const newSettings = {
-      ...settings,
-      hueMin: Math.max(0, h - 20),
-      hueMax: Math.min(180, h + 20),
-      saturationMin: Math.max(0, s - 20),
-      valueMin: Math.max(0, v - 20),
-      greenMultiplier: color.g / Math.max(color.r, color.b, 1)
-    };
-
-    setSettings(newSettings);
-
-    if (selectedFile) {
+  const handleColorsPicked = (colors: Array<{ r: number; g: number; b: number }>) => {
+    if (selectedFile && !isBackground) {
+      const newSettings = { selectedColors: colors };
+      setSettings(newSettings);
       onImageSelect(selectedFile, newSettings);
     }
   };
@@ -100,98 +69,20 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
             <p className="text-sm text-muted-foreground">{label}</p>
           </div>
         </Card>
-      ) : (
+      ) : !isBackground ? (
         <ColorPicker
           image={uploadedImage}
-          onColorPicked={handleColorPicked}
+          onColorPicked={handleColorsPicked}
         />
+      ) : (
+        <div className="relative aspect-video">
+          <img
+            src={uploadedImage}
+            alt={label}
+            className="w-full h-full object-cover rounded-lg"
+          />
+        </div>
       )}
-
-      <div className="space-y-4 p-4 border rounded-lg">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">محدوده رنگ سبز</label>
-          <div className="flex gap-4">
-            <Slider
-              min={0}
-              max={180}
-              step={1}
-              value={[settings.hueMin, settings.hueMax]}
-              onValueChange={([min, max]) => {
-                const newSettings = { ...settings, hueMin: min, hueMax: max };
-                setSettings(newSettings);
-                if (selectedFile) onImageSelect(selectedFile, newSettings);
-              }}
-              className="flex-1"
-            />
-            <span className="text-sm text-muted-foreground">
-              {settings.hueMin}° - {settings.hueMax}°
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">حداقل اشباع رنگ</label>
-          <div className="flex gap-4">
-            <Slider
-              min={0}
-              max={100}
-              step={1}
-              value={[settings.saturationMin]}
-              onValueChange={([value]) => {
-                const newSettings = { ...settings, saturationMin: value };
-                setSettings(newSettings);
-                if (selectedFile) onImageSelect(selectedFile, newSettings);
-              }}
-              className="flex-1"
-            />
-            <span className="text-sm text-muted-foreground">
-              {settings.saturationMin}%
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">حداقل روشنایی</label>
-          <div className="flex gap-4">
-            <Slider
-              min={0}
-              max={100}
-              step={1}
-              value={[settings.valueMin]}
-              onValueChange={([value]) => {
-                const newSettings = { ...settings, valueMin: value };
-                setSettings(newSettings);
-                if (selectedFile) onImageSelect(selectedFile, newSettings);
-              }}
-              className="flex-1"
-            />
-            <span className="text-sm text-muted-foreground">
-              {settings.valueMin}%
-            </span>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium">ضریب کانال سبز</label>
-          <div className="flex gap-4">
-            <Slider
-              min={1}
-              max={2}
-              step={0.1}
-              value={[settings.greenMultiplier]}
-              onValueChange={([value]) => {
-                const newSettings = { ...settings, greenMultiplier: value };
-                setSettings(newSettings);
-                if (selectedFile) onImageSelect(selectedFile, newSettings);
-              }}
-              className="flex-1"
-            />
-            <span className="text-sm text-muted-foreground">
-              {settings.greenMultiplier}x
-            </span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
