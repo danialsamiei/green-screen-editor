@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Card } from "@/components/ui/card";
-import { Upload, ChevronDown } from "lucide-react";
+import { Upload } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import ColorPicker from "./ColorPicker";
@@ -21,6 +21,7 @@ export interface GreenScreenSettings {
 
 export default function ImageUploader({ onImageSelect, label }: ImageUploaderProps) {
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [settings, setSettings] = useState<GreenScreenSettings>({
     hueMin: 100,
     hueMax: 160,
@@ -32,10 +33,10 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles[0]) {
       const file = acceptedFiles[0];
+      setSelectedFile(file);
       setUploadedImage(URL.createObjectURL(file));
-      onImageSelect(file, settings);
     }
-  }, [onImageSelect, settings]);
+  }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -66,15 +67,20 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
     const s = max === 0 ? 0 : (diff / max) * 100;
     const v = max * 100;
 
-    // تنظیم محدوده رنگ با توجه به رنگ انتخاب شده
-    setSettings(prev => ({
-      ...prev,
+    const newSettings = {
+      ...settings,
       hueMin: Math.max(0, h - 20),
       hueMax: Math.min(180, h + 20),
       saturationMin: Math.max(0, s - 20),
       valueMin: Math.max(0, v - 20),
       greenMultiplier: color.g / Math.max(color.r, color.b, 1)
-    }));
+    };
+
+    setSettings(newSettings);
+
+    if (selectedFile) {
+      onImageSelect(selectedFile, newSettings);
+    }
   };
 
   return (
@@ -110,8 +116,11 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
               max={180}
               step={1}
               value={[settings.hueMin, settings.hueMax]}
-              onValueChange={([min, max]) => 
-                setSettings(prev => ({ ...prev, hueMin: min, hueMax: max }))}
+              onValueChange={([min, max]) => {
+                const newSettings = { ...settings, hueMin: min, hueMax: max };
+                setSettings(newSettings);
+                if (selectedFile) onImageSelect(selectedFile, newSettings);
+              }}
               className="flex-1"
             />
             <span className="text-sm text-muted-foreground">
@@ -128,8 +137,11 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
               max={100}
               step={1}
               value={[settings.saturationMin]}
-              onValueChange={([value]) => 
-                setSettings(prev => ({ ...prev, saturationMin: value }))}
+              onValueChange={([value]) => {
+                const newSettings = { ...settings, saturationMin: value };
+                setSettings(newSettings);
+                if (selectedFile) onImageSelect(selectedFile, newSettings);
+              }}
               className="flex-1"
             />
             <span className="text-sm text-muted-foreground">
@@ -146,8 +158,11 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
               max={100}
               step={1}
               value={[settings.valueMin]}
-              onValueChange={([value]) => 
-                setSettings(prev => ({ ...prev, valueMin: value }))}
+              onValueChange={([value]) => {
+                const newSettings = { ...settings, valueMin: value };
+                setSettings(newSettings);
+                if (selectedFile) onImageSelect(selectedFile, newSettings);
+              }}
               className="flex-1"
             />
             <span className="text-sm text-muted-foreground">
@@ -164,8 +179,11 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
               max={2}
               step={0.1}
               value={[settings.greenMultiplier]}
-              onValueChange={([value]) => 
-                setSettings(prev => ({ ...prev, greenMultiplier: value }))}
+              onValueChange={([value]) => {
+                const newSettings = { ...settings, greenMultiplier: value };
+                setSettings(newSettings);
+                if (selectedFile) onImageSelect(selectedFile, newSettings);
+              }}
               className="flex-1"
             />
             <span className="text-sm text-muted-foreground">
