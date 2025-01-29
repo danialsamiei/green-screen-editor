@@ -28,6 +28,31 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
+        // Helper function to convert RGB to HSV
+        const rgbToHsv = (r: number, g: number, b: number) => {
+          r /= 255;
+          g /= 255;
+          b /= 255;
+
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const diff = max - min;
+
+          let h = 0;
+          if (diff === 0) h = 0;
+          else if (max === r) h = ((g - b) / diff) % 6;
+          else if (max === g) h = (b - r) / diff + 2;
+          else h = (r - g) / diff + 4;
+
+          h = Math.round(h * 60);
+          if (h < 0) h += 360;
+
+          const s = max === 0 ? 0 : (diff / max) * 100;
+          const v = max * 100;
+
+          return { h, s, v };
+        };
+
         // Helper function to convert image to PNG with transparent background
         const processPersonImage = async (buffer: Buffer) => {
           // Resize image first
@@ -46,21 +71,26 @@ export function registerRoutes(app: Express): Server {
           const pixels = new Uint8Array(data);
           const rgba = new Uint8Array(info.width * info.height * 4);
 
-          // Process each pixel with more precise green screen detection
+          // Process each pixel with advanced HSV-based green screen detection
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Enhanced green screen detection with stricter thresholds
+            // Convert RGB to HSV for better color analysis
+            const hsv = rgbToHsv(r, g, b);
+
+            // Advanced green screen detection using HSV
+            // Green hue range: 100-160 degrees
+            // Saturation: At least 40%
+            // Value: At least 35%
             const isGreenScreen = 
-              g > 150 && // Significant green component
-              g > (r * 1.8) && // Green much higher than red
-              g > (b * 1.8) && // Green much higher than blue
-              r < 150 && // Limited red
-              b < 150 && // Limited blue
-              (g - Math.max(r, b)) > 40; // Ensure significant green difference
+              (hsv.h >= 100 && hsv.h <= 160) && // Green hue range
+              (hsv.s >= 40) && // Minimum saturation
+              (hsv.v >= 35) && // Minimum brightness
+              (g > r * 1.4) && // Green significantly higher than red
+              (g > b * 1.4); // Green significantly higher than blue
 
             if (isGreenScreen) {
               // Make green screen fully transparent
