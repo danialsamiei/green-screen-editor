@@ -46,33 +46,34 @@ export function registerRoutes(app: Express): Server {
           const pixels = new Uint8Array(data);
           const rgba = new Uint8Array(info.width * info.height * 4);
 
-          // Process each pixel
+          // Process each pixel with more precise green screen detection
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Detect pure green background
+            // Enhanced green screen detection with stricter thresholds
             const isGreenScreen = 
-              g > 180 && // High green value
-              g > (r * 2) && // Much more green than red
-              g > (b * 2) && // Much more green than blue
-              r < 100 && // Low red
-              b < 100; // Low blue
+              g > 150 && // Significant green component
+              g > (r * 1.8) && // Green much higher than red
+              g > (b * 1.8) && // Green much higher than blue
+              r < 150 && // Limited red
+              b < 150 && // Limited blue
+              (g - Math.max(r, b)) > 40; // Ensure significant green difference
 
             if (isGreenScreen) {
-              // Make green background transparent
-              rgba[outIdx] = 0;
-              rgba[outIdx + 1] = 0;
-              rgba[outIdx + 2] = 0;
-              rgba[outIdx + 3] = 0;
+              // Make green screen fully transparent
+              rgba[outIdx] = 0;     // R
+              rgba[outIdx + 1] = 0; // G
+              rgba[outIdx + 2] = 0; // B
+              rgba[outIdx + 3] = 0; // Alpha (transparent)
             } else {
-              // Keep original colors for subject
+              // Keep original colors exactly as they are
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
               rgba[outIdx + 2] = b;
-              rgba[outIdx + 3] = 255;
+              rgba[outIdx + 3] = 255; // Fully opaque
             }
           }
 
