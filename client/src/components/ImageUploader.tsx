@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Upload, ChevronDown } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import ColorPicker from "./ColorPicker";
 
 interface ImageUploaderProps {
   onImageSelect: (file: File, settings: GreenScreenSettings) => void;
@@ -19,7 +20,7 @@ export interface GreenScreenSettings {
 }
 
 export default function ImageUploader({ onImageSelect, label }: ImageUploaderProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [settings, setSettings] = useState<GreenScreenSettings>({
     hueMin: 100,
     hueMax: 160,
@@ -30,7 +31,9 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles[0]) {
-      onImageSelect(acceptedFiles[0], settings);
+      const file = acceptedFiles[0];
+      setUploadedImage(URL.createObjectURL(file));
+      onImageSelect(file, settings);
     }
   }, [onImageSelect, settings]);
 
@@ -42,26 +45,65 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
     maxFiles: 1
   });
 
+  const handleColorPicked = (color: { r: number; g: number; b: number }) => {
+    // تبدیل RGB به HSV و تنظیم محدوده رنگ
+    const max = Math.max(color.r, color.g, color.b) / 255;
+    const min = Math.min(color.r, color.g, color.b) / 255;
+    const diff = max - min;
+
+    let h = 0;
+    if (diff !== 0) {
+      if (max === color.g / 255) {
+        h = 60 * (2 + (color.b / 255 - color.r / 255) / diff);
+      } else if (max === color.b / 255) {
+        h = 60 * (4 + (color.r / 255 - color.g / 255) / diff);
+      } else {
+        h = 60 * ((color.g / 255 - color.b / 255) / diff);
+      }
+    }
+    if (h < 0) h += 360;
+
+    const s = max === 0 ? 0 : (diff / max) * 100;
+    const v = max * 100;
+
+    // تنظیم محدوده رنگ با توجه به رنگ انتخاب شده
+    setSettings(prev => ({
+      ...prev,
+      hueMin: Math.max(0, h - 20),
+      hueMax: Math.min(180, h + 20),
+      saturationMin: Math.max(0, s - 20),
+      valueMin: Math.max(0, v - 20),
+      greenMultiplier: color.g / Math.max(color.r, color.b, 1)
+    }));
+  };
+
   return (
     <div className="space-y-2">
-      <Card
-        {...getRootProps()}
-        className={`
-          p-4 border-2 border-dashed cursor-pointer
-          hover:border-primary/50 transition-colors
-          ${isDragActive ? 'border-primary' : 'border-muted'}
-        `}
-      >
-        <input {...getInputProps()} />
-        <div className="flex flex-col items-center justify-center gap-2 py-4">
-          <Upload className="w-8 h-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{label}</p>
-        </div>
-      </Card>
+      {!uploadedImage ? (
+        <Card
+          {...getRootProps()}
+          className={`
+            p-4 border-2 border-dashed cursor-pointer
+            hover:border-primary/50 transition-colors
+            ${isDragActive ? 'border-primary' : 'border-muted'}
+          `}
+        >
+          <input {...getInputProps()} />
+          <div className="flex flex-col items-center justify-center gap-2 py-4">
+            <Upload className="w-8 h-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">{label}</p>
+          </div>
+        </Card>
+      ) : (
+        <ColorPicker
+          image={uploadedImage}
+          onColorPicked={handleColorPicked}
+        />
+      )}
 
       <div className="space-y-4 p-4 border rounded-lg">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Hue Range (Green)</label>
+          <label className="text-sm font-medium">محدوده رنگ سبز</label>
           <div className="flex gap-4">
             <Slider
               min={0}
@@ -79,7 +121,7 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Minimum Saturation</label>
+          <label className="text-sm font-medium">حداقل اشباع رنگ</label>
           <div className="flex gap-4">
             <Slider
               min={0}
@@ -97,7 +139,7 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Minimum Brightness</label>
+          <label className="text-sm font-medium">حداقل روشنایی</label>
           <div className="flex gap-4">
             <Slider
               min={0}
@@ -115,7 +157,7 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Green Channel Multiplier</label>
+          <label className="text-sm font-medium">ضریب کانال سبز</label>
           <div className="flex gap-4">
             <Slider
               min={1}
