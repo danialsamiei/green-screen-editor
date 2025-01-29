@@ -61,7 +61,7 @@ export function registerRoutes(app: Express): Server {
             const outIdx = (i / 3) * 4;
 
             // Refined green screen detection that only affects pure green background
-            const isGreenBackground = 
+            const isGreenBackground =
               g > 180 && // High green value
               g > (r * 2) && // Much more green than red
               g > (b * 2) && // Much more green than blue
@@ -90,27 +90,31 @@ export function registerRoutes(app: Express): Server {
               channels: 4
             }
           })
-          .png() // Ensure PNG output for transparency
-          .toBuffer();
+            .png() // Ensure PNG output for transparency
+            .toBuffer();
         };
 
         // Process both person images
         const person1Png = await removeGreenScreen(files.person1[0].buffer);
         const person2Png = await removeGreenScreen(files.person2[0].buffer);
 
-        // Create final composite with precise layer ordering:
+        // Create final composite with precise layer ordering and positioning:
         // 1. Background (bottom)
-        // 2. Person 2 (middle)
-        // 3. Person 1 (top)
+        // 2. Person 2 on right side (middle)
+        // 3. Person 1 on left side (top)
         const composite = await sharp(background)
           .composite([
             {
               input: person2Png,
-              gravity: 'center'
+              gravity: 'east', // Position person2 on the right
+              top: 0,
+              left: Math.floor(TARGET_WIDTH / 2) // Start from middle of the image
             },
             {
               input: person1Png,
-              gravity: 'center'
+              gravity: 'west', // Position person1 on the left
+              top: 0,
+              left: 0 // Start from left edge
             }
           ])
           .png()
