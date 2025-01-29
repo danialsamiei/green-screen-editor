@@ -117,13 +117,13 @@ export function registerRoutes(app: Express): Server {
             {
               input: person1Png,
               top: 0,
-              left: 0,
+              left: TARGET_WIDTH / 2, // Corrected positioning
             }
           ])
-          .jpeg({ quality: 95 })
+          .png() // Output as PNG to preserve transparency
           .toBuffer();
 
-        res.type("image/jpeg").send(composite);
+        res.type("image/png").send(composite); // Send as PNG
       } catch (error) {
         console.error("Image processing error:", error);
         res.status(500).send("Failed to process images");
