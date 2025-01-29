@@ -39,7 +39,7 @@ export function registerRoutes(app: Express): Server {
         // Helper function to process person image and remove green screen
         const removeGreenScreen = async (buffer: Buffer) => {
           const { data, info } = await sharp(buffer)
-            .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+            .resize(TARGET_WIDTH/2, TARGET_HEIGHT, {  // Resize to half width for side-by-side
               fit: 'contain',
               background: { r: 0, g: 0, b: 0, alpha: 0 }
             })
@@ -93,17 +93,17 @@ export function registerRoutes(app: Express): Server {
 
         // Create final composite in the correct layer order:
         // 1. Background (bottom)
-        // 2. Person 2 (middle)
-        // 3. Person 1 (top)
+        // 2. Person 2 (middle-right)
+        // 3. Person 1 (top-left)
         const composite = await sharp(background)
           .composite([
             {
               input: person2Png,
-              gravity: 'center',
+              gravity: 'east',  // Position person2 on the right
             },
             {
               input: person1Png,
-              gravity: 'center',
+              gravity: 'west',  // Position person1 on the left
             }
           ])
           .jpeg({ quality: 95 })
