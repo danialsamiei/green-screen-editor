@@ -38,11 +38,15 @@ export function registerRoutes(app: Express): Server {
 
         // Helper function to process person image and remove green screen
         const removeGreenScreen = async (buffer: Buffer) => {
-          // Get original dimensions
-          const metadata = await sharp(buffer).metadata();
+          // Process at target size first to ensure compatibility
+          const resizedBuffer = await sharp(buffer)
+            .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .toBuffer();
 
-          // Process at original size first
-          const { data, info } = await sharp(buffer)
+          const { data, info } = await sharp(resizedBuffer)
             .raw()
             .toBuffer({ resolveWithObject: true });
 
@@ -97,20 +101,18 @@ export function registerRoutes(app: Express): Server {
         const composite = await sharp(background)
           .composite([
             {
-              input: person2Png, // Middle layer (person2)
-              top: 0,
-              left: 0,
+              input: person2Png,
+              gravity: 'center',
             },
             {
-              input: person1Png, // Top layer (person1)
-              top: 0,
-              left: 0, // Position on the right half
+              input: person1Png,
+              gravity: 'center',
             }
           ])
           .png() // Output as PNG to preserve transparency
           .toBuffer();
 
-        res.type("image/png").send(composite); // Send as PNG
+        res.type("image/png").send(composite);
       } catch (error) {
         console.error("Image processing error:", error);
         res.status(500).send("Failed to process images");
