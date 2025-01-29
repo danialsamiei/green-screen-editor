@@ -28,7 +28,7 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        // Process background image first
+        // Process background image first - keep it opaque
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
             fit: 'cover',
@@ -36,7 +36,7 @@ export function registerRoutes(app: Express): Server {
           })
           .toBuffer();
 
-        // Helper function to process person image and remove green screen
+        // Helper function to process person image and remove only green background
         const removeGreenScreen = async (buffer: Buffer) => {
           // Process at target size first to ensure compatibility
           const resizedBuffer = await sharp(buffer)
@@ -53,27 +53,29 @@ export function registerRoutes(app: Express): Server {
           const rgba = new Uint8Array(info.width * info.height * 4);
           const pixels = new Uint8Array(data);
 
-          // Enhanced green screen removal with fine-tuned parameters
+          // More precise green screen removal that only affects background
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // More precise green screen detection
-            const isGreen = 
-              g > 100 && // Higher green threshold
-              g > (r * 1.5) && // More aggressive green/red ratio
-              g > (b * 1.5) && // More aggressive green/blue ratio
-              Math.abs(g - r) > 50 && // Larger difference required
-              Math.abs(g - b) > 50; // Larger difference required
+            // Refined green screen detection that only affects pure green background
+            const isGreenBackground = 
+              g > 180 && // High green value
+              g > (r * 2) && // Much more green than red
+              g > (b * 2) && // Much more green than blue
+              r < 100 && // Low red value
+              b < 100; // Low blue value
 
-            if (isGreen) {
+            if (isGreenBackground) {
+              // Make only the green background transparent
               rgba[outIdx] = 0;
               rgba[outIdx + 1] = 0;
               rgba[outIdx + 2] = 0;
               rgba[outIdx + 3] = 0; // Fully transparent
             } else {
+              // Keep original colors for non-background pixels
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
               rgba[outIdx + 2] = b;
@@ -81,7 +83,6 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // Convert processed image back with transparency
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -97,19 +98,22 @@ export function registerRoutes(app: Express): Server {
         const person1Png = await removeGreenScreen(files.person1[0].buffer);
         const person2Png = await removeGreenScreen(files.person2[0].buffer);
 
-        // Create final composite with precise layer ordering
+        // Create final composite with precise layer ordering:
+        // 1. Background (bottom)
+        // 2. Person 2 (middle)
+        // 3. Person 1 (top)
         const composite = await sharp(background)
           .composite([
             {
               input: person2Png,
-              gravity: 'center',
+              gravity: 'center'
             },
             {
               input: person1Png,
-              gravity: 'center',
+              gravity: 'center'
             }
           ])
-          .png() // Output as PNG to preserve transparency
+          .png()
           .toBuffer();
 
         res.type("image/png").send(composite);
