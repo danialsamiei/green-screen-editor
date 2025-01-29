@@ -28,7 +28,7 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        // Prepare background first
+        // Process background image first
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
             fit: 'cover',
@@ -36,82 +36,74 @@ export function registerRoutes(app: Express): Server {
           })
           .toBuffer();
 
-        // Process person1 image - remove green screen
-        const person1 = await sharp(files.person1[0].buffer)
-          .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-            fit: 'contain',
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-          })
-          .removeAlpha()
-          .flatten({ background: { r: 0, g: 0, b: 0 } })
-          .raw()
-          .toBuffer({ resolveWithObject: true });
+        // Helper function to remove green screen and create mask
+        const processPersonImage = async (buffer: Buffer) => {
+          const processedImage = await sharp(buffer)
+            .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+              fit: 'contain',
+              background: { r: 0, g: 0, b: 0, alpha: 0 }
+            })
+            .raw()
+            .toBuffer({ resolveWithObject: true });
 
-        // Process person2 image - remove green screen
-        const person2 = await sharp(files.person2[0].buffer)
-          .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-            fit: 'contain',
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-          })
-          .removeAlpha()
-          .flatten({ background: { r: 0, g: 0, b: 0 } })
-          .raw()
-          .toBuffer({ resolveWithObject: true });
-
-        // Create masks for green screen removal
-        const createMask = async (buffer: Buffer, info: sharp.OutputInfo) => {
-          const pixels = new Uint8ClampedArray(buffer);
-          const mask = Buffer.alloc(buffer.length / 3);
+          const { data, info } = processedImage;
+          const pixels = new Uint8ClampedArray(data);
+          const mask = Buffer.alloc(data.length / 3);
 
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
 
-            // Detect green screen (adjust threshold as needed)
-            const isGreen = g > 100 && g > (r * 1.4) && g > (b * 1.4);
+            // Refined green screen detection with more lenient thresholds
+            const isGreen = g > 90 && // Lower green threshold
+              g > (r * 1.2) && // More lenient red ratio
+              g > (b * 1.2);  // More lenient blue ratio
 
             mask[i / 3] = isGreen ? 0 : 255;
           }
 
-          return sharp(mask, {
+          const processedMask = await sharp(mask, {
             raw: {
               width: info.width,
               height: info.height,
               channels: 1
             }
-          }).toBuffer();
+          })
+          .blur(0.5) // Slight blur to smooth mask edges
+          .toBuffer();
+
+          const personImage = await sharp(buffer)
+            .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+              fit: 'contain',
+              background: { r: 0, g: 0, b: 0, alpha: 0 }
+            })
+            .toBuffer();
+
+          return { image: personImage, mask: processedMask };
         };
 
-        // Create masks for both persons
-        const mask1 = await createMask(person1.data, person1.info);
-        const mask2 = await createMask(person2.data, person2.info);
+        // Process both person images
+        const person1 = await processPersonImage(files.person1[0].buffer);
+        const person2 = await processPersonImage(files.person2[0].buffer);
 
-        // Create final composite
+        // Create final composite with explicit positioning
         const composite = await sharp(background)
           .composite([
             {
-              input: await sharp(files.person1[0].buffer)
-                .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-                  fit: 'contain',
-                  background: { r: 0, g: 0, b: 0, alpha: 0 }
-                })
-                .toBuffer(),
+              input: person1.image,
               blend: 'over',
-              mask: mask1
+              mask: person1.mask,
+              gravity: 'center'
             },
             {
-              input: await sharp(files.person2[0].buffer)
-                .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-                  fit: 'contain',
-                  background: { r: 0, g: 0, b: 0, alpha: 0 }
-                })
-                .toBuffer(),
+              input: person2.image,
               blend: 'over',
-              mask: mask2
+              mask: person2.mask,
+              gravity: 'center'
             }
           ])
-          .jpeg({ quality: 90 })
+          .jpeg({ quality: 95 })
           .toBuffer();
 
         res.type("image/jpeg").send(composite);
