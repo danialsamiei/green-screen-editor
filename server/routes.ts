@@ -36,9 +36,9 @@ export function registerRoutes(app: Express): Server {
           })
           .toBuffer();
 
-        // Helper function to remove green screen and create mask
-        const processPersonImage = async (buffer: Buffer) => {
-          const processedImage = await sharp(buffer)
+        // Helper function to process person image and remove green screen
+        const removeGreenScreen = async (buffer: Buffer) => {
+          const { data, info } = await sharp(buffer)
             .resize(TARGET_WIDTH, TARGET_HEIGHT, {
               fit: 'contain',
               background: { r: 0, g: 0, b: 0, alpha: 0 }
@@ -46,61 +46,56 @@ export function registerRoutes(app: Express): Server {
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-          const { data, info } = processedImage;
-          const pixels = new Uint8ClampedArray(data);
-          const mask = Buffer.alloc(data.length / 3);
+          const rgba = new Uint8Array(info.width * info.height * 4);
+          const pixels = new Uint8Array(data);
 
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
+            const outIdx = (i / 3) * 4;
 
-            // Refined green screen detection with more lenient thresholds
-            const isGreen = g > 90 && // Lower green threshold
-              g > (r * 1.2) && // More lenient red ratio
-              g > (b * 1.2);  // More lenient blue ratio
+            // Improved green screen detection
+            const isGreen = g > 90 && g > (r * 1.2) && g > (b * 1.2);
 
-            mask[i / 3] = isGreen ? 0 : 255;
+            if (isGreen) {
+              rgba[outIdx] = 0;     // R
+              rgba[outIdx + 1] = 0; // G
+              rgba[outIdx + 2] = 0; // B
+              rgba[outIdx + 3] = 0; // A (transparent)
+            } else {
+              rgba[outIdx] = r;     // R
+              rgba[outIdx + 1] = g; // G
+              rgba[outIdx + 2] = b; // B
+              rgba[outIdx + 3] = 255; // A (fully opaque)
+            }
           }
 
-          const processedMask = await sharp(mask, {
+          return sharp(rgba, {
             raw: {
               width: info.width,
               height: info.height,
-              channels: 1
+              channels: 4
             }
           })
-          .blur(0.5) // Slight blur to smooth mask edges
+          .png()
           .toBuffer();
-
-          const personImage = await sharp(buffer)
-            .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-              fit: 'contain',
-              background: { r: 0, g: 0, b: 0, alpha: 0 }
-            })
-            .toBuffer();
-
-          return { image: personImage, mask: processedMask };
         };
 
         // Process both person images
-        const person1 = await processPersonImage(files.person1[0].buffer);
-        const person2 = await processPersonImage(files.person2[0].buffer);
+        const person1Png = await removeGreenScreen(files.person1[0].buffer);
+        const person2Png = await removeGreenScreen(files.person2[0].buffer);
 
-        // Create final composite with explicit positioning
+        // Create final composite
         const composite = await sharp(background)
           .composite([
             {
-              input: person1.image,
-              blend: 'over',
-              mask: person1.mask,
-              gravity: 'center'
+              input: person1Png,
+              gravity: 'center',
             },
             {
-              input: person2.image,
-              blend: 'over',
-              mask: person2.mask,
-              gravity: 'center'
+              input: person2Png,
+              gravity: 'center',
             }
           ])
           .jpeg({ quality: 95 })
