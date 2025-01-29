@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { Card } from "@/components/ui/card";
-import { Upload } from "lucide-react";
+import { Upload, ChevronDown } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import {
   Collapsible,
@@ -9,7 +9,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface ImageUploaderProps {
   onImageSelect: (file: File, settings: GreenScreenSettings) => void;
@@ -25,6 +24,7 @@ export interface GreenScreenSettings {
 }
 
 export default function ImageUploader({ onImageSelect, label }: ImageUploaderProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<GreenScreenSettings>({
     hueMin: 100,
     hueMax: 160,
@@ -64,11 +64,11 @@ export default function ImageUploader({ onImageSelect, label }: ImageUploaderPro
         </div>
       </Card>
 
-      <Collapsible>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="w-full flex justify-between">
-            Green Screen Settings
-            <ChevronDown className="h-4 w-4" />
+          <Button variant="ghost" className="w-full flex justify-between items-center">
+            <span>Green Screen Settings</span>
+            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isOpen ? 'transform rotate-180' : ''}`} />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent className="space-y-4 p-4">
