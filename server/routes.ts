@@ -28,7 +28,7 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        // Process background image first
+        // Process background image first - keep full size
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
             fit: 'cover',
@@ -37,9 +37,16 @@ export function registerRoutes(app: Express): Server {
           .toBuffer();
 
         // Helper function to process person image and remove green screen
-        const removeGreenScreen = async (buffer: Buffer) => {
+        const removeGreenScreen = async (buffer: Buffer, isLeftSide: boolean) => {
+          // Calculate position-specific dimensions
+          const personWidth = TARGET_WIDTH / 2;  // Half width for side-by-side
+          const personHeight = TARGET_HEIGHT;
+
+          // Resize and process
           const { data, info } = await sharp(buffer)
-            .resize(TARGET_WIDTH/2, TARGET_HEIGHT, {  // Resize to half width for side-by-side
+            .resize({
+              width: personWidth,
+              height: personHeight,
               fit: 'contain',
               background: { r: 0, g: 0, b: 0, alpha: 0 }
             })
@@ -55,27 +62,28 @@ export function registerRoutes(app: Express): Server {
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // More precise green screen detection with refined thresholds
+            // Precise green screen detection
             const isGreen = 
-              g > 80 && // Lower green threshold to catch more shades of green
-              g > (r * 1.3) && // Slightly more aggressive red ratio
-              g > (b * 1.3) && // Slightly more aggressive blue ratio
-              Math.abs(g - r) > 30 && // Ensure significant difference from red
-              Math.abs(g - b) > 30;    // Ensure significant difference from blue
+              g > 80 && 
+              g > (r * 1.3) && 
+              g > (b * 1.3) && 
+              Math.abs(g - r) > 30 && 
+              Math.abs(g - b) > 30;
 
             if (isGreen) {
-              rgba[outIdx] = 0;     // R
-              rgba[outIdx + 1] = 0; // G
-              rgba[outIdx + 2] = 0; // B
-              rgba[outIdx + 3] = 0; // A (transparent)
+              rgba[outIdx] = 0;
+              rgba[outIdx + 1] = 0;
+              rgba[outIdx + 2] = 0;
+              rgba[outIdx + 3] = 0;
             } else {
-              rgba[outIdx] = r;     // R
-              rgba[outIdx + 1] = g; // G
-              rgba[outIdx + 2] = b; // B
-              rgba[outIdx + 3] = 255; // A (fully opaque)
+              rgba[outIdx] = r;
+              rgba[outIdx + 1] = g;
+              rgba[outIdx + 2] = b;
+              rgba[outIdx + 3] = 255;
             }
           }
 
+          // Create positioned image
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -83,27 +91,33 @@ export function registerRoutes(app: Express): Server {
               channels: 4
             }
           })
+          .extend({
+            top: 0,
+            bottom: 0,
+            left: isLeftSide ? 0 : personWidth,
+            right: isLeftSide ? personWidth : 0,
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+          })
           .png()
           .toBuffer();
         };
 
-        // Process both person images
-        const person1Png = await removeGreenScreen(files.person1[0].buffer);
-        const person2Png = await removeGreenScreen(files.person2[0].buffer);
+        // Process both person images with specific positioning
+        const person1Png = await removeGreenScreen(files.person1[0].buffer, true);   // Left side
+        const person2Png = await removeGreenScreen(files.person2[0].buffer, false);  // Right side
 
-        // Create final composite in the correct layer order:
-        // 1. Background (bottom)
-        // 2. Person 2 (middle-right)
-        // 3. Person 1 (top-left)
+        // Create final composite with exact layer ordering
         const composite = await sharp(background)
           .composite([
             {
-              input: person2Png,
-              gravity: 'east',  // Position person2 on the right
+              input: person2Png,  // Person 2 in middle layer
+              top: 0,
+              left: 0,
             },
             {
-              input: person1Png,
-              gravity: 'west',  // Position person1 on the left
+              input: person1Png,  // Person 1 in top layer
+              top: 0,
+              left: 0,
             }
           ])
           .jpeg({ quality: 95 })
