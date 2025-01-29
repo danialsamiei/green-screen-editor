@@ -86,15 +86,18 @@ export function registerRoutes(app: Express): Server {
         const person1Png = await removeGreenScreen(files.person1[0].buffer);
         const person2Png = await removeGreenScreen(files.person2[0].buffer);
 
-        // Create final composite
+        // Create final composite in the correct layer order:
+        // 1. Background (bottom)
+        // 2. Person 2 (middle)
+        // 3. Person 1 (top)
         const composite = await sharp(background)
           .composite([
             {
-              input: person1Png,
+              input: person2Png,
               gravity: 'center',
             },
             {
-              input: person2Png,
+              input: person1Png,
               gravity: 'center',
             }
           ])
