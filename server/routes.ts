@@ -49,7 +49,7 @@ export function registerRoutes(app: Express): Server {
           const rgba = new Uint8Array(info.width * info.height * 4);
           const pixels = new Uint8Array(data);
 
-          // More precise green screen removal
+          // Enhanced green screen removal
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
