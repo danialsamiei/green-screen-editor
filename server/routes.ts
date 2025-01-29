@@ -37,7 +37,7 @@ export function registerRoutes(app: Express): Server {
           .toBuffer();
 
         // Helper function to process person image and remove green screen
-        const removeGreenScreen = async (buffer: Buffer, isLeftSide: boolean) => {
+        const removeGreenScreen = async (buffer: Buffer) => {
           // Get original dimensions
           const metadata = await sharp(buffer).metadata();
 
@@ -49,26 +49,26 @@ export function registerRoutes(app: Express): Server {
           const rgba = new Uint8Array(info.width * info.height * 4);
           const pixels = new Uint8Array(data);
 
-          // Enhanced green screen removal
+          // Enhanced green screen removal with fine-tuned parameters
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Enhanced green screen detection with multiple conditions
+            // More precise green screen detection
             const isGreen = 
-              g > 70 && // Lowered threshold to catch more green variations
-              g > (r * 1.4) && // Increased ratio for better detection
-              g > (b * 1.4) &&
-              Math.abs(g - r) > 40 &&
-              Math.abs(g - b) > 40;
+              g > 100 && // Higher green threshold
+              g > (r * 1.5) && // More aggressive green/red ratio
+              g > (b * 1.5) && // More aggressive green/blue ratio
+              Math.abs(g - r) > 50 && // Larger difference required
+              Math.abs(g - b) > 50; // Larger difference required
 
             if (isGreen) {
               rgba[outIdx] = 0;
               rgba[outIdx + 1] = 0;
               rgba[outIdx + 2] = 0;
-              rgba[outIdx + 3] = 0; // Full transparency
+              rgba[outIdx + 3] = 0; // Fully transparent
             } else {
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
@@ -77,7 +77,7 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // Convert processed image back with original dimensions
+          // Convert processed image back with transparency
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -85,39 +85,26 @@ export function registerRoutes(app: Express): Server {
               channels: 4
             }
           })
-          .resize({
-            width: TARGET_WIDTH / 2,
-            height: TARGET_HEIGHT,
-            fit: 'inside',
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-          })
-          .extend({
-            top: 0,
-            bottom: 0,
-            left: isLeftSide ? 0 : TARGET_WIDTH / 2,
-            right: isLeftSide ? TARGET_WIDTH / 2 : 0,
-            background: { r: 0, g: 0, b: 0, alpha: 0 }
-          })
-          .png()
+          .png() // Ensure PNG output for transparency
           .toBuffer();
         };
 
-        // Process both person images with positioning
-        const person1Png = await removeGreenScreen(files.person1[0].buffer, true);  // Left side
-        const person2Png = await removeGreenScreen(files.person2[0].buffer, false); // Right side
+        // Process both person images
+        const person1Png = await removeGreenScreen(files.person1[0].buffer);
+        const person2Png = await removeGreenScreen(files.person2[0].buffer);
 
         // Create final composite with precise layer ordering
         const composite = await sharp(background)
           .composite([
             {
-              input: person2Png,
+              input: person2Png, // Middle layer (person2)
               top: 0,
               left: 0,
             },
             {
-              input: person1Png,
+              input: person1Png, // Top layer (person1)
               top: 0,
-              left: TARGET_WIDTH / 2, // Corrected positioning
+              left: 0, // Position on the right half
             }
           ])
           .png() // Output as PNG to preserve transparency
