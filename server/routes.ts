@@ -28,7 +28,7 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        // Process background image first - keep full size
+        // Process background image first
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
             fit: 'cover',
@@ -38,18 +38,13 @@ export function registerRoutes(app: Express): Server {
 
         // Helper function to process person image and remove green screen
         const removeGreenScreen = async (buffer: Buffer, isLeftSide: boolean) => {
-          // Calculate position-specific dimensions
-          const personWidth = TARGET_WIDTH / 2;  // Half width for side-by-side
-          const personHeight = TARGET_HEIGHT;
+          // First get original dimensions
+          const metadata = await sharp(buffer).metadata();
+          const originalWidth = metadata.width || TARGET_WIDTH / 2;
+          const originalHeight = metadata.height || TARGET_HEIGHT;
 
-          // Resize and process
+          // Process at original size
           const { data, info } = await sharp(buffer)
-            .resize({
-              width: personWidth,
-              height: personHeight,
-              fit: 'contain',
-              background: { r: 0, g: 0, b: 0, alpha: 0 }
-            })
             .raw()
             .toBuffer({ resolveWithObject: true });
 
@@ -83,7 +78,7 @@ export function registerRoutes(app: Express): Server {
             }
           }
 
-          // Create positioned image
+          // Create positioned image at original size first
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -91,11 +86,17 @@ export function registerRoutes(app: Express): Server {
               channels: 4
             }
           })
+          .resize({
+            width: TARGET_WIDTH / 2,
+            height: TARGET_HEIGHT,
+            fit: 'inside',
+            background: { r: 0, g: 0, b: 0, alpha: 0 }
+          })
           .extend({
             top: 0,
             bottom: 0,
-            left: isLeftSide ? 0 : personWidth,
-            right: isLeftSide ? personWidth : 0,
+            left: isLeftSide ? 0 : TARGET_WIDTH / 2,
+            right: isLeftSide ? TARGET_WIDTH / 2 : 0,
             background: { r: 0, g: 0, b: 0, alpha: 0 }
           })
           .png()
