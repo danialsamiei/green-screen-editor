@@ -2,22 +2,33 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import ImageUploader from "./ImageUploader";
+import ImageUploader, { GreenScreenSettings } from "./ImageUploader";
 import ImagePreview from "./ImagePreview";
 import { Download } from "lucide-react";
 
+interface ImageWithSettings {
+  file: File;
+  settings: GreenScreenSettings;
+}
+
 export default function ImageWorkspace() {
   const { toast } = useToast();
-  const [person1Image, setPerson1Image] = useState<File | null>(null);
-  const [person2Image, setPerson2Image] = useState<File | null>(null);
+  const [person1Image, setPerson1Image] = useState<ImageWithSettings | null>(null);
+  const [person2Image, setPerson2Image] = useState<ImageWithSettings | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
 
   const processImagesMutation = useMutation({
     mutationFn: async () => {
       const formData = new FormData();
-      if (person1Image) formData.append('person1', person1Image);
-      if (person2Image) formData.append('person2', person2Image);
+      if (person1Image) {
+        formData.append('person1', person1Image.file);
+        formData.append('person1Settings', JSON.stringify(person1Image.settings));
+      }
+      if (person2Image) {
+        formData.append('person2', person2Image.file);
+        formData.append('person2Settings', JSON.stringify(person2Image.settings));
+      }
       if (backgroundImage) formData.append('background', backgroundImage);
 
       const response = await fetch('/api/process-images', {
@@ -55,11 +66,11 @@ export default function ImageWorkspace() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ImageUploader
           label="Upload person 1 (green screen)"
-          onImageSelect={(file) => setPerson1Image(file)}
+          onImageSelect={(file, settings) => setPerson1Image({ file, settings })}
         />
         <ImageUploader
           label="Upload person 2 (green screen)"
-          onImageSelect={(file) => setPerson2Image(file)}
+          onImageSelect={(file, settings) => setPerson2Image({ file, settings })}
         />
         <ImageUploader
           label="Upload background image"
@@ -72,11 +83,11 @@ export default function ImageWorkspace() {
           <h3 className="text-lg font-semibold">Input Images</h3>
           <div className="grid grid-cols-3 gap-2">
             <ImagePreview
-              image={person1Image ? URL.createObjectURL(person1Image) : null}
+              image={person1Image ? URL.createObjectURL(person1Image.file) : null}
               label="Person 1"
             />
             <ImagePreview
-              image={person2Image ? URL.createObjectURL(person2Image) : null}
+              image={person2Image ? URL.createObjectURL(person2Image.file) : null}
               label="Person 2"
             />
             <ImagePreview

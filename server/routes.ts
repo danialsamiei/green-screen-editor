@@ -10,6 +10,14 @@ const upload = multer({ storage });
 const TARGET_WIDTH = 1920;
 const TARGET_HEIGHT = 1080;
 
+interface GreenScreenSettings {
+  hueMin: number;
+  hueMax: number;
+  saturationMin: number;
+  valueMin: number;
+  greenMultiplier: number;
+}
+
 export function registerRoutes(app: Express): Server {
   app.post(
     "/api/process-images",
@@ -27,6 +35,9 @@ export function registerRoutes(app: Express): Server {
         if (!files.person1 || !files.person2 || !files.background) {
           return res.status(400).send("Missing required images");
         }
+
+        const person1Settings: GreenScreenSettings = JSON.parse(req.body.person1Settings);
+        const person2Settings: GreenScreenSettings = JSON.parse(req.body.person2Settings);
 
         // Helper function to convert RGB to HSV
         const rgbToHsv = (r: number, g: number, b: number) => {
@@ -54,7 +65,7 @@ export function registerRoutes(app: Express): Server {
         };
 
         // Helper function to convert image to PNG with transparent background
-        const processPersonImage = async (buffer: Buffer) => {
+        const processPersonImage = async (buffer: Buffer, settings: GreenScreenSettings) => {
           // Resize image first
           const resizedImage = await sharp(buffer)
             .resize(TARGET_WIDTH, TARGET_HEIGHT, {
@@ -81,16 +92,13 @@ export function registerRoutes(app: Express): Server {
             // Convert RGB to HSV for better color analysis
             const hsv = rgbToHsv(r, g, b);
 
-            // Advanced green screen detection using HSV
-            // Green hue range: 100-160 degrees
-            // Saturation: At least 40%
-            // Value: At least 35%
+            // Use provided settings for green screen detection
             const isGreenScreen = 
-              (hsv.h >= 100 && hsv.h <= 160) && // Green hue range
-              (hsv.s >= 40) && // Minimum saturation
-              (hsv.v >= 35) && // Minimum brightness
-              (g > r * 1.4) && // Green significantly higher than red
-              (g > b * 1.4); // Green significantly higher than blue
+              (hsv.h >= settings.hueMin && hsv.h <= settings.hueMax) && // Custom hue range
+              (hsv.s >= settings.saturationMin) && // Custom saturation minimum
+              (hsv.v >= settings.valueMin) && // Custom value minimum
+              (g > r * settings.greenMultiplier) && // Custom green multiplier
+              (g > b * settings.greenMultiplier); // Custom green multiplier
 
             if (isGreenScreen) {
               // Make green screen fully transparent
@@ -127,9 +135,9 @@ export function registerRoutes(app: Express): Server {
           })
           .toBuffer();
 
-        // Process person images to PNG with transparency
-        const person1Png = await processPersonImage(files.person1[0].buffer);
-        const person2Png = await processPersonImage(files.person2[0].buffer);
+        // Process person images to PNG with transparency using their respective settings
+        const person1Png = await processPersonImage(files.person1[0].buffer, person1Settings);
+        const person2Png = await processPersonImage(files.person2[0].buffer, person2Settings);
 
         // Final composite with proper positioning
         const composite = await sharp(background)
