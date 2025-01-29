@@ -28,61 +28,55 @@ export function registerRoutes(app: Express): Server {
           return res.status(400).send("Missing required images");
         }
 
-        // Process background image first - keep it opaque
-        const background = await sharp(files.background[0].buffer)
-          .resize(TARGET_WIDTH, TARGET_HEIGHT, {
-            fit: 'cover',
-            position: 'center'
-          })
-          .toBuffer();
-
-        // Helper function to process person image and remove only green background
-        const removeGreenScreen = async (buffer: Buffer) => {
-          // Process at target size first to ensure compatibility
-          const resizedBuffer = await sharp(buffer)
+        // Helper function to convert image to PNG with transparent background
+        const processPersonImage = async (buffer: Buffer) => {
+          // Resize image first
+          const resizedImage = await sharp(buffer)
             .resize(TARGET_WIDTH, TARGET_HEIGHT, {
               fit: 'inside',
               withoutEnlargement: true
             })
             .toBuffer();
 
-          const { data, info } = await sharp(resizedBuffer)
+          // Convert to raw pixels for processing
+          const { data, info } = await sharp(resizedImage)
             .raw()
             .toBuffer({ resolveWithObject: true });
 
-          const rgba = new Uint8Array(info.width * info.height * 4);
           const pixels = new Uint8Array(data);
+          const rgba = new Uint8Array(info.width * info.height * 4);
 
-          // More precise green screen removal that only affects background
+          // Process each pixel
           for (let i = 0; i < pixels.length; i += 3) {
             const r = pixels[i];
             const g = pixels[i + 1];
             const b = pixels[i + 2];
             const outIdx = (i / 3) * 4;
 
-            // Refined green screen detection that only affects pure green background
-            const isGreenBackground =
+            // Detect pure green background
+            const isGreenScreen = 
               g > 180 && // High green value
               g > (r * 2) && // Much more green than red
               g > (b * 2) && // Much more green than blue
-              r < 100 && // Low red value
-              b < 100; // Low blue value
+              r < 100 && // Low red
+              b < 100; // Low blue
 
-            if (isGreenBackground) {
-              // Make only the green background transparent
+            if (isGreenScreen) {
+              // Make green background transparent
               rgba[outIdx] = 0;
               rgba[outIdx + 1] = 0;
               rgba[outIdx + 2] = 0;
-              rgba[outIdx + 3] = 0; // Fully transparent
+              rgba[outIdx + 3] = 0;
             } else {
-              // Keep original colors for non-background pixels
+              // Keep original colors for subject
               rgba[outIdx] = r;
               rgba[outIdx + 1] = g;
               rgba[outIdx + 2] = b;
-              rgba[outIdx + 3] = 255; // Fully opaque
+              rgba[outIdx + 3] = 255;
             }
           }
 
+          // Convert back to PNG with transparency
           return sharp(rgba, {
             raw: {
               width: info.width,
@@ -90,25 +84,30 @@ export function registerRoutes(app: Express): Server {
               channels: 4
             }
           })
-            .png() // Ensure PNG output for transparency
-            .toBuffer();
+          .png()
+          .toBuffer();
         };
 
-        // Process both person images
-        const person1Png = await removeGreenScreen(files.person1[0].buffer);
-        const person2Png = await removeGreenScreen(files.person2[0].buffer);
+        // Process background image (no transparency)
+        const background = await sharp(files.background[0].buffer)
+          .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+            fit: 'cover',
+            position: 'center'
+          })
+          .toBuffer();
 
-        // Create final composite with precise layer ordering and positioning:
-        // 1. Background (bottom)
-        // 2. Person 2 on right side (middle)
-        // 3. Person 1 on left side (top)
+        // Process person images to PNG with transparency
+        const person1Png = await processPersonImage(files.person1[0].buffer);
+        const person2Png = await processPersonImage(files.person2[0].buffer);
+
+        // Final composite with proper positioning
         const composite = await sharp(background)
           .composite([
             {
               input: person2Png,
               gravity: 'east', // Position person2 on the right
               top: 0,
-              left: Math.floor(TARGET_WIDTH / 2) // Start from middle of the image
+              left: Math.floor(TARGET_WIDTH / 2) // Start from middle
             },
             {
               input: person1Png,
