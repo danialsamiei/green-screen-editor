@@ -36,6 +36,20 @@ export function registerRoutes(app: Express): Server {
           JSON.parse(req.body.person1Settings) : { selectedColors: [] };
         const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
           JSON.parse(req.body.person2Settings) : { selectedColors: [] };
+          
+        const person1Scale = parseFloat(req.body.person1Scale) || 100;
+        const person2Scale = parseFloat(req.body.person2Scale) || 100;
+        const person1Position = req.body.person1Position ? JSON.parse(req.body.person1Position) : { x: 0, y: 0 };
+        const person2Position = req.body.person2Position ? JSON.parse(req.body.person2Position) : { x: 0, y: 0 };
+
+        // Process images with scale and position
+        const processedPerson1 = await sharp(files.person1[0].buffer)
+          .resize(Math.round((TARGET_WIDTH * person1Scale) / 100))
+          .toBuffer();
+          
+        const processedPerson2 = await sharp(files.person2[0].buffer)
+          .resize(Math.round((TARGET_WIDTH * person2Scale) / 100))
+          .toBuffer();
 
         // Helper function to convert RGB to HSV
         const rgbToHsv = (r: number, g: number, b: number) => {

@@ -25,6 +25,29 @@ export default function ImageWorkspace() {
 
   const processImagesMutation = useMutation({
     mutationFn: async () => {
+      const adjustedFormData = new FormData();
+      
+      if (person1Image) {
+        adjustedFormData.append('person1', person1Image.file);
+        adjustedFormData.append('person1Scale', person1Scale.toString());
+        adjustedFormData.append('person1Position', JSON.stringify(person1Position));
+        if (person1Image.settings) {
+          adjustedFormData.append('person1Settings', JSON.stringify(person1Image.settings));
+        }
+      }
+      
+      if (person2Image) {
+        adjustedFormData.append('person2', person2Image.file);
+        adjustedFormData.append('person2Scale', person2Scale.toString());
+        adjustedFormData.append('person2Position', JSON.stringify(person2Position));
+        if (person2Image.settings) {
+          adjustedFormData.append('person2Settings', JSON.stringify(person2Image.settings));
+        }
+      }
+      
+      if (backgroundImage) {
+        adjustedFormData.append('background', backgroundImage);
+      }
       const formData = new FormData();
       if (person1Image) {
         formData.append('person1', person1Image.file);
