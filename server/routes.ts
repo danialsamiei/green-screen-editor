@@ -9,9 +9,16 @@ const upload = multer({ storage });
 // Standard size for processing
 const TARGET_WIDTH = 1920;
 const TARGET_HEIGHT = 1080;
+const SPACING_PERCENT = 5; // 5% spacing between images
 
 interface GreenScreenSettings {
   selectedColors: Array<{ r: number; g: number; b: number }>;
+}
+
+interface ImageBounds {
+  left: number;
+  right: number;
+  width: number;
 }
 
 export function registerRoutes(app: Express): Server {
@@ -36,47 +43,13 @@ export function registerRoutes(app: Express): Server {
           JSON.parse(req.body.person1Settings) : { selectedColors: [] };
         const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
           JSON.parse(req.body.person2Settings) : { selectedColors: [] };
-          
+
         const person1Scale = parseFloat(req.body.person1Scale) || 100;
         const person2Scale = parseFloat(req.body.person2Scale) || 100;
         const person1Position = req.body.person1Position ? JSON.parse(req.body.person1Position) : { x: 0, y: 0 };
         const person2Position = req.body.person2Position ? JSON.parse(req.body.person2Position) : { x: 0, y: 0 };
 
-        // Process images with scale and position
-        const processedPerson1 = await sharp(files.person1[0].buffer)
-          .resize(Math.round((TARGET_WIDTH * person1Scale) / 100))
-          .toBuffer();
-          
-        const processedPerson2 = await sharp(files.person2[0].buffer)
-          .resize(Math.round((TARGET_WIDTH * person2Scale) / 100))
-          .toBuffer();
-
-        // Helper function to convert RGB to HSV
-        const rgbToHsv = (r: number, g: number, b: number) => {
-          r /= 255;
-          g /= 255;
-          b /= 255;
-
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          const diff = max - min;
-
-          let h = 0;
-          if (diff === 0) h = 0;
-          else if (max === r) h = ((g - b) / diff) % 6;
-          else if (max === g) h = (b - r) / diff + 2;
-          else h = (r - g) / diff + 4;
-
-          h = Math.round(h * 60);
-          if (h < 0) h += 360;
-
-          const s = max === 0 ? 0 : (diff / max) * 100;
-          const v = max * 100;
-
-          return { h, s, v };
-        };
-
-        // Helper function to convert image to PNG with transparent background
+        // Helper function to convert image to PNG with transparent background and calculate bounds
         const processPersonImage = async (buffer: Buffer, settings: GreenScreenSettings) => {
           // Resize image first
           const resizedImage = await sharp(buffer)
@@ -97,37 +70,49 @@ export function registerRoutes(app: Express): Server {
           // Define color tolerance
           const tolerance = 30;
 
+          // Variables to track the bounds of non-transparent pixels
+          let leftBound = info.width;
+          let rightBound = 0;
+
           // Process each pixel with color matching
-          for (let i = 0; i < pixels.length; i += 3) {
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            const outIdx = (i / 3) * 4;
+          for (let y = 0; y < info.height; y++) {
+            for (let x = 0; x < info.width; x++) {
+              const i = (y * info.width + x) * 3;
+              const outIdx = (y * info.width + x) * 4;
 
-            // Check if pixel color matches any of the selected colors
-            const shouldBeTransparent = settings.selectedColors.some(color => 
-              Math.abs(r - color.r) < tolerance &&
-              Math.abs(g - color.g) < tolerance &&
-              Math.abs(b - color.b) < tolerance
-            );
+              const r = pixels[i];
+              const g = pixels[i + 1];
+              const b = pixels[i + 2];
 
-            if (shouldBeTransparent) {
-              // Make pixel transparent
-              rgba[outIdx] = 0;     // R
-              rgba[outIdx + 1] = 0; // G
-              rgba[outIdx + 2] = 0; // B
-              rgba[outIdx + 3] = 0; // Alpha (transparent)
-            } else {
-              // Keep original colors
-              rgba[outIdx] = r;
-              rgba[outIdx + 1] = g;
-              rgba[outIdx + 2] = b;
-              rgba[outIdx + 3] = 255; // Fully opaque
+              // Check if pixel color matches any of the selected colors
+              const shouldBeTransparent = settings.selectedColors.some(color => 
+                Math.abs(r - color.r) < tolerance &&
+                Math.abs(g - color.g) < tolerance &&
+                Math.abs(b - color.b) < tolerance
+              );
+
+              if (shouldBeTransparent) {
+                // Make pixel transparent
+                rgba[outIdx] = 0;     // R
+                rgba[outIdx + 1] = 0; // G
+                rgba[outIdx + 2] = 0; // B
+                rgba[outIdx + 3] = 0; // Alpha (transparent)
+              } else {
+                // Keep original colors and update bounds
+                rgba[outIdx] = r;
+                rgba[outIdx + 1] = g;
+                rgba[outIdx + 2] = b;
+                rgba[outIdx + 3] = 255; // Fully opaque
+
+                // Update bounds for non-transparent pixels
+                leftBound = Math.min(leftBound, x);
+                rightBound = Math.max(rightBound, x);
+              }
             }
           }
 
           // Convert back to PNG with transparency
-          return sharp(rgba, {
+          const processedImage = await sharp(rgba, {
             raw: {
               width: info.width,
               height: info.height,
@@ -136,6 +121,15 @@ export function registerRoutes(app: Express): Server {
           })
           .png()
           .toBuffer();
+
+          return {
+            buffer: processedImage,
+            bounds: {
+              left: leftBound,
+              right: rightBound,
+              width: info.width
+            }
+          };
         };
 
         // Process background image (no transparency)
@@ -147,23 +141,30 @@ export function registerRoutes(app: Express): Server {
           .toBuffer();
 
         // Process person images to PNG with transparency using their respective settings
-        const person1Png = await processPersonImage(files.person1[0].buffer, person1Settings);
-        const person2Png = await processPersonImage(files.person2[0].buffer, person2Settings);
+        const person1Result = await processPersonImage(files.person1[0].buffer, person1Settings);
+        const person2Result = await processPersonImage(files.person2[0].buffer, person2Settings);
 
-        // Final composite with proper positioning
+        // Calculate spacing based on actual image content
+        const spacingPixels = Math.floor(TARGET_WIDTH * (SPACING_PERCENT / 100));
+
+        // Calculate positions based on bounds and spacing
+        const person1X = Math.floor(TARGET_WIDTH * 0.25) - (person1Result.bounds.right - person1Result.bounds.left) / 2;
+        const person2X = Math.floor(TARGET_WIDTH * 0.75) - (person2Result.bounds.right - person2Result.bounds.left) / 2;
+
+        // Final composite with calculated positioning
         const composite = await sharp(background)
           .composite([
             {
-              input: person2Png,
-              gravity: 'east', // Position person2 on the right
-              top: 0,
-              left: Math.floor(TARGET_WIDTH / 2) // Start from middle
+              input: person2Result.buffer,
+              gravity: 'northwest',
+              left: person2X,
+              top: 0
             },
             {
-              input: person1Png,
-              gravity: 'west', // Position person1 on the left
-              top: 0,
-              left: 0 // Start from left edge
+              input: person1Result.buffer,
+              gravity: 'northwest',
+              left: person1X,
+              top: 0
             }
           ])
           .png()
