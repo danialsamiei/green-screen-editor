@@ -14,11 +14,17 @@ export default function ImagePreview({ image, isProcessing, label }: ImagePrevie
         {isProcessing ? (
           <Skeleton className="w-full h-full" />
         ) : image ? (
-          <img
-            src={image}
-            alt={label}
-            className="w-full h-full object-cover"
-          />
+          <div className="w-full h-full bg-neutral-100 dark:bg-neutral-900">
+            <img
+              src={image}
+              alt={label}
+              className="w-full h-full object-contain"
+              style={{
+                imageRendering: 'pixelated',
+                WebkitImageRendering: 'pixelated',
+              }}
+            />
+          </div>
         ) : (
           <div className="w-full h-full bg-muted flex items-center justify-center">
             <p className="text-sm text-muted-foreground">{label}</p>
