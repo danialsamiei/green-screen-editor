@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ import { Download } from "lucide-react";
 interface ImageWithSettings {
   file: File;
   settings?: GreenScreenSettings;
+  previewUrl?: string;
 }
 
 export default function ImageWorkspace() {
@@ -16,12 +17,22 @@ export default function ImageWorkspace() {
   const [person1Image, setPerson1Image] = useState<ImageWithSettings | null>(null);
   const [person2Image, setPerson2Image] = useState<ImageWithSettings | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<File | null>(null);
+  const [backgroundPreviewUrl, setBackgroundPreviewUrl] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
-  const [selectedPerson, setSelectedPerson] = useState<number | null>(null);
   const [person1Scale, setPerson1Scale] = useState(100);
   const [person2Scale, setPerson2Scale] = useState(100);
   const [person1Position, setPerson1Position] = useState({ x: 0, y: 0 });
   const [person2Position, setPerson2Position] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    // Cleanup URLs when component unmounts
+    return () => {
+      if (person1Image?.previewUrl) URL.revokeObjectURL(person1Image.previewUrl);
+      if (person2Image?.previewUrl) URL.revokeObjectURL(person2Image.previewUrl);
+      if (backgroundPreviewUrl) URL.revokeObjectURL(backgroundPreviewUrl);
+      if (finalImage) URL.revokeObjectURL(finalImage);
+    };
+  }, []);
 
   const processImagesMutation = useMutation({
     mutationFn: async () => {
@@ -70,6 +81,7 @@ export default function ImageWorkspace() {
       }
     },
     onSuccess: (imageUrl) => {
+      if (finalImage) URL.revokeObjectURL(finalImage);
       setFinalImage(imageUrl);
       toast({
         title: "موفقیت‌آمیز!",
@@ -86,6 +98,24 @@ export default function ImageWorkspace() {
     },
   });
 
+  const handlePerson1Select = (file: File, settings?: GreenScreenSettings) => {
+    if (person1Image?.previewUrl) URL.revokeObjectURL(person1Image.previewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setPerson1Image({ file, settings, previewUrl });
+  };
+
+  const handlePerson2Select = (file: File, settings?: GreenScreenSettings) => {
+    if (person2Image?.previewUrl) URL.revokeObjectURL(person2Image.previewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setPerson2Image({ file, settings, previewUrl });
+  };
+
+  const handleBackgroundSelect = (file: File) => {
+    if (backgroundPreviewUrl) URL.revokeObjectURL(backgroundPreviewUrl);
+    setBackgroundImage(file);
+    setBackgroundPreviewUrl(URL.createObjectURL(file));
+  };
+
   const canProcess = person1Image && person2Image && backgroundImage;
 
   return (
@@ -93,15 +123,15 @@ export default function ImageWorkspace() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <ImageUploader
           label="تصویر شخص اول (پرده سبز)"
-          onImageSelect={(file, settings) => setPerson1Image({ file, settings })}
+          onImageSelect={handlePerson1Select}
         />
         <ImageUploader
           label="آپلود تصویر شخص دوم (پرده سبز)"
-          onImageSelect={(file, settings) => setPerson2Image({ file, settings })}
+          onImageSelect={handlePerson2Select}
         />
         <ImageUploader
           label="آپلود تصویر پس‌زمینه"
-          onImageSelect={(file) => setBackgroundImage(file)}
+          onImageSelect={handleBackgroundSelect}
           isBackground
         />
       </div>
@@ -111,15 +141,15 @@ export default function ImageWorkspace() {
           <h3 className="text-lg font-semibold">تصاویر ورودی</h3>
           <div className="grid grid-cols-3 gap-2">
             <ImagePreview
-              image={person1Image ? URL.createObjectURL(person1Image.file) : null}
+              image={person1Image?.previewUrl || null}
               label="شخص اول"
             />
             <ImagePreview
-              image={person2Image ? URL.createObjectURL(person2Image.file) : null}
+              image={person2Image?.previewUrl || null}
               label="شخص دوم"
             />
             <ImagePreview
-              image={backgroundImage ? URL.createObjectURL(backgroundImage) : null}
+              image={backgroundPreviewUrl}
               label="پس‌زمینه"
             />
           </div>
