@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import Draggable from 'react-draggable';
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Card,
   CardContent,
@@ -30,6 +31,8 @@ export default function ImageEditor() {
   const [person2, setPerson2] = useState<ProcessedImage | null>(null);
   const [background, setBackground] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
 
   const { getRootProps: getPerson1Props, getInputProps: getPerson1Input } = useDropzone({
     accept: { 'image/*': [] },
@@ -79,37 +82,54 @@ export default function ImageEditor() {
   const processImages = async () => {
     if (!person1?.url || !person2?.url || !background) return;
 
-    const formData = new FormData();
-
-    // Convert data URLs back to blobs
-    const person1Response = await fetch(person1.url);
-    const person2Response = await fetch(person2.url);
-    const backgroundResponse = await fetch(background);
-
-    formData.append('person1', await person1Response.blob());
-    formData.append('person2', await person2Response.blob());
-    formData.append('background', await backgroundResponse.blob());
-
-    // Add settings
-    formData.append('person1Settings', JSON.stringify(person1.settings));
-    formData.append('person2Settings', JSON.stringify(person2.settings));
-    formData.append('person1Scale', person1.scale.toString());
-    formData.append('person2Scale', person2.scale.toString());
-    formData.append('person1Position', JSON.stringify(person1.position));
-    formData.append('person2Position', JSON.stringify(person2.position));
-
+    setIsProcessing(true);
     try {
-      const response = await fetch('/api/process-images', {
+      const formData = new FormData();
+
+      // Convert data URLs back to blobs
+      const person1Response = await fetch(person1.url);
+      const person2Response = await fetch(person2.url);
+      const backgroundResponse = await fetch(background);
+
+      formData.append('person1', await person1Response.blob());
+      formData.append('person2', await person2Response.blob());
+      formData.append('background', await backgroundResponse.blob());
+
+      // Add settings
+      formData.append('person1Settings', JSON.stringify(person1.settings));
+      formData.append('person2Settings', JSON.stringify(person2.settings));
+      formData.append('person1Scale', person1.scale.toString());
+      formData.append('person2Scale', person2.scale.toString());
+      formData.append('person1Position', JSON.stringify(person1.position));
+      formData.append('person2Position', JSON.stringify(person2.position));
+
+      // Make sure to use the full URL including protocol and host
+      const apiUrl = `${window.location.protocol}//${window.location.host}/api/process-images`;
+      const response = await fetch(apiUrl, {
         method: 'POST',
         body: formData,
       });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        setFinalImage(URL.createObjectURL(blob));
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+
+      const blob = await response.blob();
+      setFinalImage(URL.createObjectURL(blob));
+
+      toast({
+        title: "موفق",
+        description: "تصاویر با موفقیت پردازش شدند",
+      });
     } catch (error) {
       console.error('Error processing images:', error);
+      toast({
+        title: "خطا",
+        description: "خطا در پردازش تصاویر. لطفا دوباره تلاش کنید.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -237,9 +257,9 @@ export default function ImageEditor() {
       <div className="text-center mb-6">
         <Button 
           onClick={processImages}
-          disabled={!person1?.url || !person2?.url || !background}
+          disabled={!person1?.url || !person2?.url || !background || isProcessing}
         >
-          پردازش تصاویر
+          {isProcessing ? "در حال پردازش..." : "پردازش تصاویر"}
         </Button>
       </div>
 
