@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import Draggable from 'react-draggable';
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { 
@@ -29,7 +30,7 @@ export default function ImageEditor() {
   const [person2, setPerson2] = useState<ProcessedImage | null>(null);
   const [background, setBackground] = useState<string | null>(null);
   const [finalImage, setFinalImage] = useState<string | null>(null);
-  
+
   const { getRootProps: getPerson1Props, getInputProps: getPerson1Input } = useDropzone({
     accept: { 'image/*': [] },
     onDrop: async (files) => {
@@ -68,20 +69,27 @@ export default function ImageEditor() {
     }
   });
 
+  const handleDrag = (setter: typeof setPerson1, image: ProcessedImage) => (e: any, data: { x: number; y: number }) => {
+    setter({
+      ...image,
+      position: { x: data.x, y: data.y }
+    });
+  };
+
   const processImages = async () => {
     if (!person1?.url || !person2?.url || !background) return;
 
     const formData = new FormData();
-    
+
     // Convert data URLs back to blobs
     const person1Response = await fetch(person1.url);
     const person2Response = await fetch(person2.url);
     const backgroundResponse = await fetch(background);
-    
+
     formData.append('person1', await person1Response.blob());
     formData.append('person2', await person2Response.blob());
     formData.append('background', await backgroundResponse.blob());
-    
+
     // Add settings
     formData.append('person1Settings', JSON.stringify(person1.settings));
     formData.append('person2Settings', JSON.stringify(person2.settings));
@@ -108,7 +116,7 @@ export default function ImageEditor() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-3xl font-bold mb-6">گرین اسکرین ادیتور</h1>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardHeader>
@@ -116,14 +124,32 @@ export default function ImageEditor() {
             <CardDescription>تصویر با پس زمینه سبز</CardDescription>
           </CardHeader>
           <CardContent>
-            <div {...getPerson1Props()} className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer">
-              <input {...getPerson1Input()} />
-              {person1?.url ? (
-                <img src={person1.url} alt="Person 1" className="max-w-full h-auto" />
-              ) : (
+            {!person1 ? (
+              <div {...getPerson1Props()} className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer">
+                <input {...getPerson1Input()} />
                 <p>برای آپلود کلیک کنید یا فایل را اینجا رها کنید</p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                <Draggable
+                  position={person1.position}
+                  onDrag={handleDrag(setPerson1, person1)}
+                  bounds="parent"
+                >
+                  <div className="cursor-move absolute">
+                    <img 
+                      src={person1.url} 
+                      alt="Person 1"
+                      style={{ 
+                        transform: `scale(${person1.scale / 100})`,
+                        transformOrigin: 'center center'
+                      }}
+                      className="max-w-full h-auto"
+                    />
+                  </div>
+                </Draggable>
+              </div>
+            )}
             {person1 && (
               <div className="mt-4">
                 <label className="block mb-2">مقیاس</label>
@@ -147,14 +173,32 @@ export default function ImageEditor() {
             <CardDescription>تصویر با پس زمینه سبز</CardDescription>
           </CardHeader>
           <CardContent>
-            <div {...getPerson2Props()} className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer">
-              <input {...getPerson2Input()} />
-              {person2?.url ? (
-                <img src={person2.url} alt="Person 2" className="max-w-full h-auto" />
-              ) : (
+            {!person2 ? (
+              <div {...getPerson2Props()} className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer">
+                <input {...getPerson2Input()} />
                 <p>برای آپلود کلیک کنید یا فایل را اینجا رها کنید</p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="relative w-full aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                <Draggable
+                  position={person2.position}
+                  onDrag={handleDrag(setPerson2, person2)}
+                  bounds="parent"
+                >
+                  <div className="cursor-move absolute">
+                    <img 
+                      src={person2.url} 
+                      alt="Person 2"
+                      style={{ 
+                        transform: `scale(${person2.scale / 100})`,
+                        transformOrigin: 'center center'
+                      }}
+                      className="max-w-full h-auto"
+                    />
+                  </div>
+                </Draggable>
+              </div>
+            )}
             {person2 && (
               <div className="mt-4">
                 <label className="block mb-2">مقیاس</label>
