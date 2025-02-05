@@ -15,12 +15,6 @@ interface GreenScreenSettings {
   selectedColors: Array<{ r: number; g: number; b: number }>;
 }
 
-interface ImageBounds {
-  left: number;
-  right: number;
-  width: number;
-}
-
 export function registerRoutes(app: Express): Server {
   app.post(
     "/api/process-images",
@@ -30,25 +24,30 @@ export function registerRoutes(app: Express): Server {
       { name: "background", maxCount: 1 },
     ]),
     async (req, res) => {
+      console.log("Processing request started");
       try {
         const files = req.files as {
           [fieldname: string]: Express.Multer.File[];
         };
 
-        if (!files.person1 || !files.person2 || !files.background) {
-          return res.status(400).send("Missing required images");
+        console.log("Files received:", Object.keys(files));
+
+        if (!files.person1?.[0] || !files.person2?.[0] || !files.background?.[0]) {
+          console.error("Missing required files", { 
+            person1: !!files.person1, 
+            person2: !!files.person2, 
+            background: !!files.background 
+          });
+          return res.status(400).json({ error: "Missing required images" });
         }
 
-        const person1Settings: GreenScreenSettings = req.body.person1Settings ?
+        // Parse settings from request body
+        const person1Settings: GreenScreenSettings = req.body.person1Settings ? 
           JSON.parse(req.body.person1Settings) : { selectedColors: [] };
-        const person2Settings: GreenScreenSettings = req.body.person2Settings ?
+        const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
           JSON.parse(req.body.person2Settings) : { selectedColors: [] };
 
-        const person1Scale = parseFloat(req.body.person1Scale) || 100;
-        const person2Scale = parseFloat(req.body.person2Scale) || 100;
-        const person1Position = req.body.person1Position ? JSON.parse(req.body.person1Position) : { x: 0, y: 0 };
-        const person2Position = req.body.person2Position ? JSON.parse(req.body.person2Position) : { x: 0, y: 0 };
-
+        console.log("Processing background image");
         // Process background image (no transparency)
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
@@ -57,46 +56,41 @@ export function registerRoutes(app: Express): Server {
           })
           .toBuffer();
 
-        // Process person images with transparency and get their bounds
+        console.log("Processing person images");
+        // Process person images with transparency
         const person1Result = await processPersonImage(files.person1[0].buffer, person1Settings);
         const person2Result = await processPersonImage(files.person2[0].buffer, person2Settings);
 
-        // Calculate positions in pixels (ensuring integers)
+        // Calculate positions in pixels
         const spacing = Math.floor(TARGET_WIDTH * (SPACING_PERCENT / 100));
-        const totalWidth = person1Result.bounds.right - person1Result.bounds.left +
-                         person2Result.bounds.right - person2Result.bounds.left +
-                         spacing;
+        const totalWidth = person1Result.bounds.width + person2Result.bounds.width + spacing;
 
         // Center the entire composition
         const startX = Math.floor((TARGET_WIDTH - totalWidth) / 2);
 
-        // Calculate individual positions
-        const person1X = Math.floor(startX);
-        const person2X = Math.floor(startX + (person1Result.bounds.right - person1Result.bounds.left) + spacing);
-
-        // Final composite with calculated integer positions
+        console.log("Creating final composite");
+        // Final composite
         const composite = await sharp(background)
           .composite([
             {
               input: person1Result.buffer,
               top: 0,
-              left: person1X,
-              gravity: 'northwest'
+              left: startX
             },
             {
               input: person2Result.buffer,
               top: 0,
-              left: person2X,
-              gravity: 'northwest'
+              left: startX + person1Result.bounds.width + spacing
             }
           ])
           .png()
           .toBuffer();
 
+        console.log("Sending response");
         res.type("image/png").send(composite);
       } catch (error) {
         console.error("Image processing error:", error);
-        res.status(500).send("Failed to process images");
+        res.status(500).json({ error: "Failed to process images" });
       }
     }
   );
@@ -105,7 +99,7 @@ export function registerRoutes(app: Express): Server {
   return httpServer;
 }
 
-// Helper function to process person image and calculate bounds
+// Helper function to process person image
 async function processPersonImage(buffer: Buffer, settings: GreenScreenSettings) {
   // Resize image first
   const resizedImage = await sharp(buffer)
@@ -126,44 +120,32 @@ async function processPersonImage(buffer: Buffer, settings: GreenScreenSettings)
   // Define color tolerance
   const tolerance = 30;
 
-  // Variables to track the bounds of non-transparent pixels
-  let leftBound = info.width;
-  let rightBound = 0;
+  // Process each pixel
+  for (let i = 0; i < pixels.length; i += 3) {
+    const outIdx = (i / 3) * 4;
+    const r = pixels[i];
+    const g = pixels[i + 1];
+    const b = pixels[i + 2];
 
-  // Process each pixel with color matching
-  for (let y = 0; y < info.height; y++) {
-    for (let x = 0; x < info.width; x++) {
-      const i = (y * info.width + x) * 3;
-      const outIdx = (y * info.width + x) * 4;
+    // Check if pixel color matches any of the selected colors
+    const shouldBeTransparent = settings.selectedColors.some(color =>
+      Math.abs(r - color.r) < tolerance &&
+      Math.abs(g - color.g) < tolerance &&
+      Math.abs(b - color.b) < tolerance
+    );
 
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-
-      // Check if pixel color matches any of the selected colors
-      const shouldBeTransparent = settings.selectedColors.some(color =>
-        Math.abs(r - color.r) < tolerance &&
-        Math.abs(g - color.g) < tolerance &&
-        Math.abs(b - color.b) < tolerance
-      );
-
-      if (shouldBeTransparent) {
-        // Make pixel transparent
-        rgba[outIdx] = 0;     // R
-        rgba[outIdx + 1] = 0; // G
-        rgba[outIdx + 2] = 0; // B
-        rgba[outIdx + 3] = 0; // Alpha (transparent)
-      } else {
-        // Keep original colors and update bounds
-        rgba[outIdx] = r;
-        rgba[outIdx + 1] = g;
-        rgba[outIdx + 2] = b;
-        rgba[outIdx + 3] = 255; // Fully opaque
-
-        // Update bounds for non-transparent pixels
-        leftBound = Math.min(leftBound, x);
-        rightBound = Math.max(rightBound, x);
-      }
+    if (shouldBeTransparent) {
+      // Make pixel transparent
+      rgba[outIdx] = 0;
+      rgba[outIdx + 1] = 0;
+      rgba[outIdx + 2] = 0;
+      rgba[outIdx + 3] = 0;
+    } else {
+      // Keep original colors
+      rgba[outIdx] = r;
+      rgba[outIdx + 1] = g;
+      rgba[outIdx + 2] = b;
+      rgba[outIdx + 3] = 255;
     }
   }
 
@@ -181,9 +163,8 @@ async function processPersonImage(buffer: Buffer, settings: GreenScreenSettings)
   return {
     buffer: processedImage,
     bounds: {
-      left: leftBound,
-      right: rightBound,
-      width: info.width
+      width: info.width,
+      height: info.height
     }
   };
 }
