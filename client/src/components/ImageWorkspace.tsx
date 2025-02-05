@@ -62,15 +62,30 @@ export default function ImageWorkspace() {
       formData.append('person2Position', JSON.stringify(person2Position));
 
       try {
-        // Make sure to use the full URL including protocol and host
-        const apiUrl = `${window.location.protocol}//${window.location.host}/api/process-images`;
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        const apiUrl = `${protocol}//${host}/api/process-images`;
+
+        console.log('Sending request to:', apiUrl);
+        console.log('FormData contents:', {
+          person1: person1Image.file.name,
+          person2: person2Image.file.name,
+          background: backgroundImage.name,
+          settings: {
+            person1: person1Image.settings,
+            person2: person2Image.settings
+          }
+        });
+
         const response = await fetch(apiUrl, {
           method: 'POST',
           body: formData,
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          const errorText = await response.text();
+          console.error('Server error response:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}, ${errorText}`);
         }
 
         const blob = await response.blob();

@@ -16,6 +16,17 @@ interface GreenScreenSettings {
 }
 
 export function registerRoutes(app: Express): Server {
+  // Add CORS headers middleware
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   app.post(
     "/api/process-images",
     upload.fields([
@@ -31,6 +42,7 @@ export function registerRoutes(app: Express): Server {
         };
 
         console.log("Files received:", Object.keys(files));
+        console.log("Request body:", req.body);
 
         if (!files.person1?.[0] || !files.person2?.[0] || !files.background?.[0]) {
           console.error("Missing required files", { 
@@ -43,9 +55,9 @@ export function registerRoutes(app: Express): Server {
 
         // Parse settings from request body
         const person1Settings: GreenScreenSettings = req.body.person1Settings ? 
-          JSON.parse(req.body.person1Settings) : { selectedColors: [] };
+          JSON.parse(req.body.person1Settings) : { selectedColors: [{ r: 0, g: 255, b: 0 }] };
         const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
-          JSON.parse(req.body.person2Settings) : { selectedColors: [] };
+          JSON.parse(req.body.person2Settings) : { selectedColors: [{ r: 0, g: 255, b: 0 }] };
 
         console.log("Processing background image");
         // Process background image (no transparency)
