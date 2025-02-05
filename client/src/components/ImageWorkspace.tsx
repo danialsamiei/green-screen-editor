@@ -25,43 +25,49 @@ export default function ImageWorkspace() {
 
   const processImagesMutation = useMutation({
     mutationFn: async () => {
+      if (!person1Image || !person2Image || !backgroundImage) {
+        throw new Error('All images are required');
+      }
+
       const formData = new FormData();
 
-      if (person1Image) {
-        formData.append('person1', person1Image.file);
-        formData.append('person1Scale', person1Scale.toString());
-        formData.append('person1Position', JSON.stringify(person1Position));
-        if (person1Image.settings) {
-          formData.append('person1Settings', JSON.stringify(person1Image.settings));
+      // Add images
+      formData.append('person1', person1Image.file);
+      formData.append('person2', person2Image.file);
+      formData.append('background', backgroundImage);
+
+      // Add settings
+      if (person1Image.settings) {
+        formData.append('person1Settings', JSON.stringify(person1Image.settings));
+      }
+      if (person2Image.settings) {
+        formData.append('person2Settings', JSON.stringify(person2Image.settings));
+      }
+
+      // Add scale and position
+      formData.append('person1Scale', person1Scale.toString());
+      formData.append('person2Scale', person2Scale.toString());
+      formData.append('person1Position', JSON.stringify(person1Position));
+      formData.append('person2Position', JSON.stringify(person2Position));
+
+      try {
+        // Make sure to use the full URL including protocol and host
+        const apiUrl = `${window.location.protocol}//${window.location.host}/api/process-images`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const blob = await response.blob();
+        return URL.createObjectURL(blob);
+      } catch (error) {
+        console.error('Error processing images:', error);
+        throw error;
       }
-
-      if (person2Image) {
-        formData.append('person2', person2Image.file);
-        formData.append('person2Scale', person2Scale.toString());
-        formData.append('person2Position', JSON.stringify(person2Position));
-        if (person2Image.settings) {
-          formData.append('person2Settings', JSON.stringify(person2Image.settings));
-        }
-      }
-
-      if (backgroundImage) {
-        formData.append('background', backgroundImage);
-      }
-
-      // Make sure to use the full URL including protocol and host
-      const apiUrl = `${window.location.protocol}//${window.location.host}/api/process-images`;
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process images');
-      }
-
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
     },
     onSuccess: (imageUrl) => {
       setFinalImage(imageUrl);
@@ -70,7 +76,8 @@ export default function ImageWorkspace() {
         description: "تصویر ترکیبی شما ایجاد شد.",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Mutation error:', error);
       toast({
         title: "خطا",
         description: "در پردازش تصاویر خطایی رخ داد. لطفاً دوباره تلاش کنید.",
