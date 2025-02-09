@@ -103,9 +103,8 @@ export default function ImageEditor() {
       formData.append('person1Position', JSON.stringify(person1.position));
       formData.append('person2Position', JSON.stringify(person2.position));
 
-      // Make sure to use the full URL including protocol and host
-      const apiUrl = `${window.location.protocol}//${window.location.host}/api/process-images`;
-      const response = await fetch(apiUrl, {
+      // Use relative URL for API endpoint
+      const response = await fetch('/api/process-images', {
         method: 'POST',
         body: formData,
       });

@@ -2,6 +2,7 @@ import { createServer, type Server } from "http";
 import type { Express } from "express";
 import multer from "multer";
 import sharp from "sharp";
+import path from "path";
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
@@ -16,17 +17,7 @@ interface GreenScreenSettings {
 }
 
 export function registerRoutes(app: Express): Server {
-  // Add CORS headers middleware
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(200);
-    }
-    next();
-  });
-
+  // Handle image processing endpoint
   app.post(
     "/api/process-images",
     upload.fields([
@@ -41,26 +32,22 @@ export function registerRoutes(app: Express): Server {
           [fieldname: string]: Express.Multer.File[];
         };
 
-        console.log("Files received:", Object.keys(files));
-        console.log("Request body:", req.body);
-
         if (!files.person1?.[0] || !files.person2?.[0] || !files.background?.[0]) {
-          console.error("Missing required files", { 
-            person1: !!files.person1, 
-            person2: !!files.person2, 
-            background: !!files.background 
+          console.error("Missing required files", {
+            person1: !!files.person1,
+            person2: !!files.person2,
+            background: !!files.background
           });
           return res.status(400).json({ error: "Missing required images" });
         }
 
         // Parse settings from request body
-        const person1Settings: GreenScreenSettings = req.body.person1Settings ? 
+        const person1Settings: GreenScreenSettings = req.body.person1Settings ?
           JSON.parse(req.body.person1Settings) : { selectedColors: [{ r: 0, g: 255, b: 0 }] };
-        const person2Settings: GreenScreenSettings = req.body.person2Settings ? 
+        const person2Settings: GreenScreenSettings = req.body.person2Settings ?
           JSON.parse(req.body.person2Settings) : { selectedColors: [{ r: 0, g: 255, b: 0 }] };
 
         console.log("Processing background image");
-        // Process background image (no transparency)
         const background = await sharp(files.background[0].buffer)
           .resize(TARGET_WIDTH, TARGET_HEIGHT, {
             fit: 'cover',
@@ -69,19 +56,14 @@ export function registerRoutes(app: Express): Server {
           .toBuffer();
 
         console.log("Processing person images");
-        // Process person images with transparency
         const person1Result = await processPersonImage(files.person1[0].buffer, person1Settings);
         const person2Result = await processPersonImage(files.person2[0].buffer, person2Settings);
 
-        // Calculate positions in pixels
         const spacing = Math.floor(TARGET_WIDTH * (SPACING_PERCENT / 100));
         const totalWidth = person1Result.bounds.width + person2Result.bounds.width + spacing;
-
-        // Center the entire composition
         const startX = Math.floor((TARGET_WIDTH - totalWidth) / 2);
 
         console.log("Creating final composite");
-        // Final composite
         const composite = await sharp(background)
           .composite([
             {
